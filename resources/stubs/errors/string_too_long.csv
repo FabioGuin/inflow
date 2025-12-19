@@ -1,0 +1,4 @@
+title,isbn,price,published_at,is_active,author_name
+Normal Book,978-4444444441,10.99,2020-01-01,true,Short Name
+Very Long Title That Exceeds The Maximum Length Allowed For The Title Column In The Database Schema Which Is Usually 255 Characters And This Title Is Definitely Much Longer Than That Limit So It Should Trigger A Data Too Long Error When Trying To Insert Into The Database,978-4444444442,10.99,2020-01-01,true,Test Author
+

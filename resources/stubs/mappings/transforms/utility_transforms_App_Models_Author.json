@@ -1,0 +1,125 @@
+{
+    "name": "Utility Transforms Test",
+    "description": "Test mapping for utility transformations (coalesce, default, null_if_empty, json_decode)",
+    "source_schema": {
+        "columns": {
+            "name": {
+                "name": "name",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 8,
+                "examples": [
+                    "Coalesce Test 1",
+                    "Coalesce Test 2",
+                    "Coalesce Test 3"
+                ]
+            },
+            "email": {
+                "name": "email",
+                "type": "email",
+                "null_count": 2,
+                "unique_count": 6,
+                "examples": [
+                    "primary@test.com",
+                    "json@test.com",
+                    null
+                ]
+            },
+            "backup_email": {
+                "name": "backup_email",
+                "type": "email",
+                "null_count": 3,
+                "unique_count": 5,
+                "examples": [
+                    "backup@test.com",
+                    "fallback@test.com",
+                    null
+                ]
+            },
+            "json_data": {
+                "name": "json_data",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 8,
+                "examples": [
+                    "{\"key\": \"value\", \"number\": 42}",
+                    "[1, 2, 3, 4, 5]",
+                    "{\"nested\": {\"deep\": \"value\"}}"
+                ]
+            },
+            "tags_string": {
+                "name": "tags_string",
+                "type": "string",
+                "null_count": 1,
+                "unique_count": 7,
+                "examples": [
+                    "fiction,classic,bestseller",
+                    "romance|drama|comedy",
+                    "horror;thriller;mystery"
+                ]
+            },
+            "optional_field": {
+                "name": "optional_field",
+                "type": "string",
+                "null_count": 3,
+                "unique_count": 5,
+                "examples": [
+                    "has_value",
+                    "",
+                    null
+                ]
+            }
+        },
+        "total_rows": 8
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\Author",
+            "columns": [
+                {
+                    "source": "name",
+                    "target": "name",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|min:2|max:100",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "email",
+                    "target": "email",
+                    "transforms": [
+                        "trim",
+                        "lower",
+                        "coalesce:backup_email"
+                    ],
+                    "default": null,
+                    "validation_rule": "nullable|email|unique:authors,email",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "optional_field",
+                    "target": "country",
+                    "transforms": [
+                        "trim",
+                        "upper",
+                        "truncate:2",
+                        "null_if_empty",
+                        "default:US"
+                    ],
+                    "default": "US",
+                    "validation_rule": "nullable|string|size:2|alpha",
+                    "relation_lookup": null
+                }
+            ],
+            "options": {
+                "unique_key": "email",
+                "duplicate_strategy": "update"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T15:00:00+00:00",
+    "updated_at": "2025-12-18T15:00:00+00:00"
+}
+

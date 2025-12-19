@@ -1,0 +1,12 @@
+title,raw_title,author_name,description_html,long_text,isbn
+CamelCase Test,hello world example,John Smith,"<p>Some <b>HTML</b> content</p>",This is a very long text that should be truncated at some point to test the truncate transform functionality,978-1111111111
+SnakeCase Test,HelloWorld,Jane Doe,"<script>alert('xss')</script><p>Safe text</p>",Another long piece of text for testing purposes that exceeds the normal length we would want to display,978-2222222222
+TitleCase Test,the quick brown fox,Bob Johnson,"<div class='test'>Nested <span>tags</span></div>",Short text,978-3333333333
+PrefixSuffix Test,simple text,Alice Williams,"Plain text no HTML",Medium length text that is just right,978-4444444444
+Mixed Casing,MixedCASE_with_underscores,UPPERCASE NAME,"<a href='#'>Link</a> and <img src='x'>",Exactly fifty characters long for precise testing.,978-5555555555
+Numbers In Text,hello123world456,Name With 123 Numbers,"<b>1</b><i>2</i><u>3</u>",Numbers 123 and symbols !@# in text,978-6666666666
+Unicode Support,café résumé naïve,José García,"<p>Unicode: 日本語</p>",Unicode: émojis 📚 and açcénts,978-7777777777
+Empty Values,,,,"",978-8888888888
+Special Chars,hello_world-test.name,O'Brien-Smith,"<div data-x=\"test\">Content</div>",Special chars: & < > " ' / \,978-9999999999
+Already Formatted,already-in-kebab-case,already snake_case,"No HTML here",Already truncat,978-0000000000
+

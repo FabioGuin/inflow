@@ -1,0 +1,12 @@
+name,email,country,bio
+Short Bio,short@test.com,USA,Brief bio
+Medium Bio,medium@test.com,UK,"This is a medium length biography that contains a few sentences. It describes the author in moderate detail and includes some background information about their work and achievements."
+Long Bio,long@test.com,Canada,"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. This paragraph continues with more text to make it even longer and test how the system handles extended content."
+Very Long,verylong@test.com,Australia,"This biography is intentionally very long to test the system's handling of large text fields. It contains multiple paragraphs of content. The author was born in a small town and grew up with a passion for writing. They published their first book at age 25 and went on to win numerous awards. Their work has been translated into over 50 languages and sold millions of copies worldwide. Critics have praised their unique writing style and compelling storytelling. They continue to write and inspire new generations of authors. This entry tests how the ETL system processes, transforms, and stores large amounts of textual data without truncation or corruption."
+Numbers In Bio,numbers@test.com,Germany,"Contact: +1-555-0123, Price: $99.99, Date: 2024-01-15, Percentage: 85.5%, Scientific: 1.23e-10"
+Special Format,format@test.com,France,"JSON-like: {""key"": ""value""}, Array-like: [1,2,3], XML-like: <tag>content</tag>"
+URL Heavy,urls@test.com,Japan,"Visit https://example.com/path?query=value&other=123#anchor or http://test.org:8080/api/v1/resource"
+Code Sample,code@test.com,Brazil,"function test() { return 'Hello World'; } // JavaScript comment /* block comment */"
+Mixed Content,mixed@test.com,India,"Regular text, then CODE_BLOCK, then more text. CAPS_LOCK, lowercase, MixedCase, and numbers123."
+Final Normal,final@test.com,Mexico,A simple normal bio to end the test file
+

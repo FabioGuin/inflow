@@ -1,0 +1,12 @@
+name,email,country,bio,website
+Normal Entry,normal@test.com,USA,A normal bio,https://normal.com
+Empty Country,empty@test.com,,Has bio,https://empty.com
+Empty Bio,emptybio@test.com,UK,,https://emptybio.com
+Empty Website,emptyweb@test.com,Canada,Has bio here,
+All Empty Optional,allempty@test.com,,,
+Just Commas,justcommas@test.com,,,
+Quoted Empty,"quoted@test.com","","",""
+Space Only,space@test.com, , , 
+Double Quoted,double@test.com,"France","Bio ""quoted"" here","https://quoted.com"
+Normal Again,again@test.com,Germany,Another bio,https://again.com
+

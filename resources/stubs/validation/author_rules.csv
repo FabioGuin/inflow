@@ -1,0 +1,13 @@
+name,email,country
+Valid Author,valid@test.com,US
+A,short@test.com,UK
+This name is way too long and exceeds the maximum allowed length of one hundred characters which should fail validation,toolong@test.com,IT
+Missing Email,,FR
+Invalid Email,not-an-email,DE
+Duplicate Email,duplicate@test.com,ES
+Duplicate Email 2,duplicate@test.com,PT
+Valid Two,valid2@test.com,GB
+Country Too Long,country@test.com,USA
+Country Numbers,numbers@test.com,12
+Valid Three,valid3@test.com,CA
+

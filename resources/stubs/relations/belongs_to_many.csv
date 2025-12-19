@@ -1,0 +1,12 @@
+title,isbn,price,author_name,tag_names,tag_order
+The Great Gatsby,978-0743273565,12.99,F. Scott Fitzgerald,"classic,american,romance",1
+1984,978-0451524935,9.99,George Orwell,"dystopia,classic,political",1
+To Kill a Mockingbird,978-0061120084,14.99,Harper Lee,"classic,american,legal",1
+Brave New World,978-0060850524,10.99,Aldous Huxley,"dystopia,scifi,classic",2
+The Hobbit,978-0547928227,15.99,J.R.R. Tolkien,"fantasy,adventure,classic",1
+Fahrenheit 451,978-1451673319,13.99,Ray Bradbury,"dystopia,scifi",1
+Foundation,978-0553293357,8.99,Isaac Asimov,"scifi,classic,space",1
+Dune,978-0441172719,17.99,Frank Herbert,"scifi,fantasy,adventure",1
+The Shining,978-0307743657,14.99,Stephen King,"horror,thriller",1
+Murder on the Orient Express,978-0062693662,12.99,Agatha Christie,"mystery,detective,classic",1
+

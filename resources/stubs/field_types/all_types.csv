@@ -1,0 +1,12 @@
+name,email,country,book_title,book_isbn,book_price,book_published_at,book_is_active
+John Smith,john@test.com,USA,Test Book One,978-1111111111,19.99,2023-05-15,true
+Jane Doe,jane@test.com,UK,Test Book Two,978-2222222222,24.50,2022-11-20,false
+Bob Wilson,bob@test.com,Canada,Test Book Three,978-3333333333,0.99,2024-01-01,true
+Alice Brown,alice@test.com,Australia,Test Book Four,978-4444444444,99.99,2021-06-30,true
+Charlie Davis,charlie@test.com,Germany,Test Book Five,978-5555555555,15.00,2020-12-25,false
+Diana Evans,diana@test.com,France,Test Book Six,978-6666666666,45.75,2019-03-14,true
+Edward Ford,edward@test.com,Japan,Test Book Seven,978-7777777777,33.33,2018-08-08,true
+Fiona Green,fiona@test.com,Brazil,Test Book Eight,978-8888888888,12.00,2017-04-01,false
+George Hill,george@test.com,India,Test Book Nine,978-9999999999,27.99,2016-09-21,true
+Helen Irwin,helen@test.com,Mexico,Test Book Ten,978-0000000000,8.49,2015-02-14,true
+

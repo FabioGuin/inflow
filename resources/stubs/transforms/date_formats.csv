@@ -1,0 +1,12 @@
+title,isbn,price,date_us,date_eu,date_iso,date_full,author_name
+US Format Book,978-1111111111,19.99,05/15/2023,15/05/2023,2023-05-15,May 15 2023,John Author
+EU Format Book,978-2222222222,15.99,11/20/2022,20/11/2022,2022-11-20,November 20 2022,Jane Author
+ISO Format Book,978-3333333333,12.99,06/30/2021,30/06/2021,2021-06-30,June 30 2021,Bob Author
+Full Month Book,978-4444444444,10.99,12/25/2020,25/12/2020,2020-12-25,December 25 2020,Alice Author
+Short Year Book,978-5555555555,8.99,03/14/19,14/03/19,2019-03-14,March 14 2019,Charlie Author
+Timestamp Book,978-6666666666,14.99,08/08/2018,08/08/2018,2018-08-08T14:30:00,August 8 2018,Diana Author
+Unix Timestamp,978-7777777777,11.99,04/01/2017,01/04/2017,1491004800,April 1 2017,Edward Author
+Abbreviated Month,978-8888888888,9.99,Sep 21 2016,21 Sep 2016,2016-09-21,21-Sep-2016,Fiona Author
+Year Only,978-9999999999,20.00,2015,2015,2015-01-01,2015,George Author
+Today Reference,978-0000000001,5.00,today,today,now,current,Helen Author
+

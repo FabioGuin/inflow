@@ -1,0 +1,67 @@
+[
+  {
+    "name": "Coalesce Test 1",
+    "email": null,
+    "backup_email": "backup@test.com",
+    "json_data": "{\"key\": \"value\", \"number\": 42}",
+    "tags_string": "fiction,classic,bestseller",
+    "optional_field": ""
+  },
+  {
+    "name": "Coalesce Test 2",
+    "email": "",
+    "backup_email": "fallback@test.com",
+    "json_data": "[1, 2, 3, 4, 5]",
+    "tags_string": "romance|drama|comedy",
+    "optional_field": null
+  },
+  {
+    "name": "Coalesce Test 3",
+    "email": "primary@test.com",
+    "backup_email": "unused@test.com",
+    "json_data": "{\"nested\": {\"deep\": \"value\"}}",
+    "tags_string": "horror;thriller;mystery",
+    "optional_field": "has_value"
+  },
+  {
+    "name": "JSON Array Test",
+    "email": "json@test.com",
+    "backup_email": null,
+    "json_data": "[{\"id\": 1}, {\"id\": 2}]",
+    "tags_string": "a,b,c,d,e",
+    "optional_field": "   "
+  },
+  {
+    "name": "Empty JSON",
+    "email": "empty@test.com",
+    "backup_email": "also@test.com",
+    "json_data": "{}",
+    "tags_string": "",
+    "optional_field": null
+  },
+  {
+    "name": "Invalid JSON",
+    "email": "invalid@test.com",
+    "backup_email": null,
+    "json_data": "not valid json",
+    "tags_string": "single",
+    "optional_field": "present"
+  },
+  {
+    "name": "Whitespace Only",
+    "email": "   ",
+    "backup_email": "whitespace@test.com",
+    "json_data": "{\"empty\": \"\"}",
+    "tags_string": " spaced , values , here ",
+    "optional_field": "   \t\n   "
+  },
+  {
+    "name": "Unicode JSON",
+    "email": "unicode@test.com",
+    "backup_email": null,
+    "json_data": "{\"emoji\": \"📚\", \"accents\": \"café\"}",
+    "tags_string": "日本語,中文,한국어",
+    "optional_field": "unicode: éàü"
+  }
+]
+

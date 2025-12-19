@@ -1,0 +1,55 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "fabio-guin/laravel-inflow",
+    "type": "library",
+    "description": "Laravel InFlow - Motore ETL dev-first per Laravel",
+    "keywords": [
+        "laravel",
+        "etl",
+        "import",
+        "csv",
+        "excel",
+        "data-processing"
+    ],
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0",
+        "laravel/prompts": "^0.3",
+        "phpoffice/phpspreadsheet": "^5.3",
+        "ext-fileinfo": "*",
+        "ext-libxml": "*",
+        "ext-simplexml": "*"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.0",
+        "phpunit/phpunit": "^11.0",
+        "laravel/pint": "^1.16"
+    },
+    "autoload": {
+        "psr-4": {
+            "InFlow\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "InFlow\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "InFlow\\InFlowServiceProvider"
+            ]
+        }
+    },
+    "scripts": {
+        "pint": "pint",
+        "pint:test": "pint --test"
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

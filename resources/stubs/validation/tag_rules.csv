@@ -1,0 +1,13 @@
+name,slug
+Fiction,fiction
+A,a
+Science Fiction,science-fiction
+This tag name is way too long and should exceed fifty characters maximum,toolong-slug
+Valid Tag,valid_tag
+Numbers Tag,tag123
+Spaces Slug,invalid slug with spaces
+Special Chars,special@chars!
+Duplicate Slug,duplicate-slug
+Another Dup,duplicate-slug
+Programming,programming
+

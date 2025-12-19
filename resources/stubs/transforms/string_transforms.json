@@ -1,0 +1,63 @@
+[
+  {
+    "name": "  needs trimming  ",
+    "email": "UPPERCASE@TEST.COM",
+    "country": "usa",
+    "slug_source": "This Should Be A Slug"
+  },
+  {
+    "name": "lowercase name",
+    "email": "lowercase@test.com",
+    "country": "UK",
+    "slug_source": "Another Slug Test Here"
+  },
+  {
+    "name": "UPPERCASE NAME",
+    "email": "mixed@Test.Com",
+    "country": "canada",
+    "slug_source": "Special & Characters! Here?"
+  },
+  {
+    "name": "MixedCase Name",
+    "email": "   spaces@test.com   ",
+    "country": "AUSTRALIA",
+    "slug_source": "Unicode: Café Résumé"
+  },
+  {
+    "name": "   Multiple   Spaces   ",
+    "email": "multiple.spaces@test.com",
+    "country": "france",
+    "slug_source": "Multiple   Spaces   Test"
+  },
+  {
+    "name": "tab\there",
+    "email": "tab@test.com",
+    "country": "Germany",
+    "slug_source": "Tabs\tAnd\tSpaces"
+  },
+  {
+    "name": "newline\nname",
+    "email": "newline@test.com",
+    "country": "japan",
+    "slug_source": "Newlines\nIn\nText"
+  },
+  {
+    "name": "numbers123name",
+    "email": "numbers@test.com",
+    "country": "Brazil",
+    "slug_source": "Numbers 123 In 456 Slug"
+  },
+  {
+    "name": "hyphen-name",
+    "email": "hyphen@test.com",
+    "country": "india",
+    "slug_source": "Already-Has-Hyphens"
+  },
+  {
+    "name": "underscore_name",
+    "email": "underscore@test.com",
+    "country": "Mexico",
+    "slug_source": "Under_Score_Test"
+  }
+]
+

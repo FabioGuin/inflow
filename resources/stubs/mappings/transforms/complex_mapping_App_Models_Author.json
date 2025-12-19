@@ -1,0 +1,93 @@
+{
+    "name": "Complex XML Mapping Test",
+    "description": "Test mapping for complex XML structure with nested relations",
+    "source_schema": {
+        "columns": {
+            "personal_info.full_name": {"name": "personal_info.full_name", "type": "string"},
+            "personal_info.contact_email": {"name": "personal_info.contact_email", "type": "email"},
+            "personal_info.nationality": {"name": "personal_info.nationality", "type": "string"},
+            "biography.short_bio": {"name": "biography.short_bio", "type": "string"},
+            "biography.personal_website": {"name": "biography.personal_website", "type": "url"},
+            "publications": {"name": "publications", "type": "array"}
+        },
+        "total_rows": 3
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\Author",
+            "columns": [
+                {
+                    "source": "personal_info.full_name",
+                    "target": "name",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|string|min:2|max:100",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "personal_info.contact_email",
+                    "target": "email",
+                    "transforms": ["trim", "lower"],
+                    "default": null,
+                    "validation_rule": "required|email|unique:authors,email",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "personal_info.nationality",
+                    "target": "country",
+                    "transforms": ["trim", "upper", "truncate:2"],
+                    "default": "US",
+                    "validation_rule": "nullable|string|size:2|alpha",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "biography.short_bio",
+                    "target": "profile.bio",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "nullable|string|max:1000",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "biography.personal_website",
+                    "target": "profile.website",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "nullable|url|max:255",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "publications.*.book_title",
+                    "target": "books.*.title",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|string|min:1|max:255",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "publications.*.book_isbn",
+                    "target": "books.*.isbn",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "publications.*.book_price",
+                    "target": "books.*.price",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|numeric|min:0|max:9999.99",
+                    "relation_lookup": null
+                }
+            ],
+            "options": {
+                "unique_key": "email",
+                "duplicate_strategy": "update"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T22:00:00+00:00",
+    "updated_at": "2025-12-18T22:00:00+00:00"
+}
+

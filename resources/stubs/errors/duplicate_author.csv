@@ -1,0 +1,4 @@
+title,isbn,price,published_at,is_active,author_name,author_email
+Book 1,978-5555555551,10.99,2020-01-01,true,Same Author,same@email.com
+Book 2,978-5555555552,15.99,2021-01-01,true,Same Author,same@email.com
+

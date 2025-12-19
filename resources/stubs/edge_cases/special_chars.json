@@ -1,0 +1,63 @@
+[
+  {
+    "name": "José García",
+    "email": "jose@test.com",
+    "country": "España",
+    "bio": "Escritor español con ñ y acentos: áéíóú"
+  },
+  {
+    "name": "François Müller",
+    "email": "francois@test.com",
+    "country": "Français",
+    "bio": "German umlauts: äöüß and French: çèê"
+  },
+  {
+    "name": "日本語 Author",
+    "email": "japanese@test.com",
+    "country": "日本",
+    "bio": "Japanese text: こんにちは世界"
+  },
+  {
+    "name": "Emoji Author 🎉",
+    "email": "emoji@test.com",
+    "country": "🌍",
+    "bio": "Contains emojis: 📚✨🔥💯"
+  },
+  {
+    "name": "Quote's \"Test\"",
+    "email": "quotes@test.com",
+    "country": "UK",
+    "bio": "Single 'quotes' and \"double quotes\" mixed"
+  },
+  {
+    "name": "Backslash\\Test",
+    "email": "backslash@test.com",
+    "country": "USA",
+    "bio": "Paths like C:\\Users\\Test and escapes \\n \\t"
+  },
+  {
+    "name": "HTML <b>Bold</b>",
+    "email": "html@test.com",
+    "country": "Web",
+    "bio": "<script>alert('xss')</script> and <img src='x'>"
+  },
+  {
+    "name": "Newline\nAuthor",
+    "email": "newline@test.com",
+    "country": "Multi\nLine",
+    "bio": "Bio with\nnewlines\nand\ttabs"
+  },
+  {
+    "name": "Null\u0000Byte",
+    "email": "null@test.com",
+    "country": "Binary",
+    "bio": "Contains null byte and control chars"
+  },
+  {
+    "name": "Normal After Special",
+    "email": "normal@test.com",
+    "country": "Safe",
+    "bio": "Just a normal entry after all the special ones"
+  }
+]
+

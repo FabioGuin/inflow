@@ -1,0 +1,93 @@
+[
+  {
+    "name": "F. Scott Fitzgerald",
+    "email": "fitzgerald@authors.com",
+    "country": "USA",
+    "profile": {
+      "bio": "American novelist and short story writer",
+      "website": "https://fitzgerald.com"
+    }
+  },
+  {
+    "name": "George Orwell",
+    "email": "orwell@authors.com",
+    "country": "UK",
+    "profile": {
+      "bio": "English novelist, essayist, and critic",
+      "website": "https://orwell.org"
+    }
+  },
+  {
+    "name": "Harper Lee",
+    "email": "lee@authors.com",
+    "country": "USA",
+    "profile": {
+      "bio": "American novelist widely known for To Kill a Mockingbird",
+      "website": null
+    }
+  },
+  {
+    "name": "Jane Austen",
+    "email": "austen@authors.com",
+    "country": "UK",
+    "profile": {
+      "bio": "English novelist known for romantic fiction",
+      "website": "https://janeausten.org"
+    }
+  },
+  {
+    "name": "J.D. Salinger",
+    "email": "salinger@authors.com",
+    "country": "USA",
+    "profile": {
+      "bio": "American writer known for The Catcher in the Rye",
+      "website": null
+    }
+  },
+  {
+    "name": "Aldous Huxley",
+    "email": "huxley@authors.com",
+    "country": "UK",
+    "profile": {
+      "bio": "English writer and philosopher",
+      "website": "https://huxley.net"
+    }
+  },
+  {
+    "name": "J.R.R. Tolkien",
+    "email": "tolkien@authors.com",
+    "country": "UK",
+    "profile": {
+      "bio": "English writer, poet, and philologist",
+      "website": "https://tolkienestate.com"
+    }
+  },
+  {
+    "name": "Ray Bradbury",
+    "email": "bradbury@authors.com",
+    "country": "USA",
+    "profile": {
+      "bio": "American author and screenwriter",
+      "website": "https://raybradbury.com"
+    }
+  },
+  {
+    "name": "William Golding",
+    "email": "golding@authors.com",
+    "country": "UK",
+    "profile": {
+      "bio": "British novelist, playwright, and poet",
+      "website": null
+    }
+  },
+  {
+    "name": "Ernest Hemingway",
+    "email": "hemingway@authors.com",
+    "country": "USA",
+    "profile": {
+      "bio": "American novelist and journalist",
+      "website": "https://hemingway.com"
+    }
+  }
+]
+

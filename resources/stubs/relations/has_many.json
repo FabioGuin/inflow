@@ -1,0 +1,51 @@
+[
+  {
+    "name": "George Orwell",
+    "email": "orwell@authors.com",
+    "country": "UK",
+    "books": [
+      {"title": "1984", "isbn": "978-0451524935", "price": 9.99},
+      {"title": "Animal Farm", "isbn": "978-0451526342", "price": 7.99},
+      {"title": "Down and Out in Paris and London", "isbn": "978-0156262248", "price": 11.99}
+    ]
+  },
+  {
+    "name": "J.R.R. Tolkien",
+    "email": "tolkien@authors.com",
+    "country": "UK",
+    "books": [
+      {"title": "The Hobbit", "isbn": "978-0547928227", "price": 15.99},
+      {"title": "The Fellowship of the Ring", "isbn": "978-0547928210", "price": 16.99},
+      {"title": "The Two Towers", "isbn": "978-0547928203", "price": 16.99}
+    ]
+  },
+  {
+    "name": "Stephen King",
+    "email": "king@authors.com",
+    "country": "USA",
+    "books": [
+      {"title": "The Shining", "isbn": "978-0307743657", "price": 14.99},
+      {"title": "IT", "isbn": "978-1501142970", "price": 18.99}
+    ]
+  },
+  {
+    "name": "Agatha Christie",
+    "email": "christie@authors.com",
+    "country": "UK",
+    "books": [
+      {"title": "Murder on the Orient Express", "isbn": "978-0062693662", "price": 12.99},
+      {"title": "And Then There Were None", "isbn": "978-0062073488", "price": 13.99},
+      {"title": "The Murder of Roger Ackroyd", "isbn": "978-0062073563", "price": 11.99}
+    ]
+  },
+  {
+    "name": "Isaac Asimov",
+    "email": "asimov@authors.com",
+    "country": "USA",
+    "books": [
+      {"title": "Foundation", "isbn": "978-0553293357", "price": 8.99},
+      {"title": "I, Robot", "isbn": "978-0553382563", "price": 9.49}
+    ]
+  }
+]
+

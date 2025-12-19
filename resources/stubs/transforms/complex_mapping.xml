@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<authors>
+  <author>
+    <personal_info>
+      <full_name>Ernest Hemingway</full_name>
+      <contact_email>hemingway@literature.com</contact_email>
+      <nationality>American</nationality>
+    </personal_info>
+    <biography>
+      <short_bio>American novelist and journalist</short_bio>
+      <personal_website>https://hemingway.org</personal_website>
+    </biography>
+    <publications>
+      <book>
+        <book_title>The Old Man and the Sea</book_title>
+        <book_isbn>978-0684801223</book_isbn>
+        <book_price>11.99</book_price>
+      </book>
+      <book>
+        <book_title>A Farewell to Arms</book_title>
+        <book_isbn>978-0684801469</book_isbn>
+        <book_price>13.99</book_price>
+      </book>
+    </publications>
+  </author>
+  <author>
+    <personal_info>
+      <full_name>Virginia Woolf</full_name>
+      <contact_email>woolf@bloomsbury.com</contact_email>
+      <nationality>British</nationality>
+    </personal_info>
+    <biography>
+      <short_bio>English writer and modernist</short_bio>
+      <personal_website>https://virginiawoolf.org</personal_website>
+    </biography>
+    <publications>
+      <book>
+        <book_title>Mrs Dalloway</book_title>
+        <book_isbn>978-0156628709</book_isbn>
+        <book_price>10.99</book_price>
+      </book>
+    </publications>
+  </author>
+  <author>
+    <personal_info>
+      <full_name>Gabriel García Márquez</full_name>
+      <contact_email>gabo@macondo.com</contact_email>
+      <nationality>Colombian</nationality>
+    </personal_info>
+    <biography>
+      <short_bio>Colombian novelist and Nobel laureate</short_bio>
+      <personal_website>https://gabogabo.com</personal_website>
+    </biography>
+    <publications>
+      <book>
+        <book_title>One Hundred Years of Solitude</book_title>
+        <book_isbn>978-0060883287</book_isbn>
+        <book_price>15.99</book_price>
+      </book>
+      <book>
+        <book_title>Love in the Time of Cholera</book_title>
+        <book_isbn>978-0307389732</book_isbn>
+        <book_price>14.99</book_price>
+      </book>
+    </publications>
+  </author>
+</authors>
+

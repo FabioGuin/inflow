@@ -1,0 +1,12 @@
+title,isbn,price,published_at,is_active,author_name
+First Unique Book,978-1111111111,19.99,2023-05-15,true,John Author
+Second Unique Book,978-2222222222,15.99,2022-11-20,true,Jane Author
+Duplicate ISBN 1,978-3333333333,12.99,2021-06-30,true,Bob Author
+Duplicate ISBN 2,978-3333333333,14.99,2020-12-25,true,Alice Author
+Third Unique,978-4444444444,10.99,2019-03-14,true,Charlie Author
+Another Duplicate,978-1111111111,25.00,2018-08-08,false,Diana Author
+Fourth Unique,978-5555555555,8.99,2017-04-01,true,Edward Author
+Triple Duplicate,978-3333333333,30.00,2016-09-21,true,Fiona Author
+Fifth Unique,978-6666666666,22.99,2015-02-14,true,George Author
+Last Unique,978-7777777777,18.50,2024-01-01,true,Helen Author
+

@@ -1,0 +1,99 @@
+[
+  {
+    "name": "Complete Author",
+    "email": "complete@test.com",
+    "country": "USA",
+    "profile": {
+      "bio": "Full bio here",
+      "website": "https://complete.com",
+      "verified_at": "2024-01-15 10:30:00"
+    }
+  },
+  {
+    "name": "No Country",
+    "email": "nocountry@test.com",
+    "country": null,
+    "profile": {
+      "bio": "Bio without country",
+      "website": "https://nocountry.com",
+      "verified_at": null
+    }
+  },
+  {
+    "name": "Minimal Profile",
+    "email": "minimal@test.com",
+    "country": "UK",
+    "profile": {
+      "bio": null,
+      "website": null,
+      "verified_at": null
+    }
+  },
+  {
+    "name": "No Profile",
+    "email": "noprofile@test.com",
+    "country": "Canada",
+    "profile": null
+  },
+  {
+    "name": "Empty Strings",
+    "email": "empty@test.com",
+    "country": "",
+    "profile": {
+      "bio": "",
+      "website": "",
+      "verified_at": null
+    }
+  },
+  {
+    "name": "Partial Data",
+    "email": "partial@test.com",
+    "country": "France",
+    "profile": {
+      "bio": "Only bio filled",
+      "website": null,
+      "verified_at": "2023-06-01 08:00:00"
+    }
+  },
+  {
+    "name": "Website Only",
+    "email": "website@test.com",
+    "country": null,
+    "profile": {
+      "bio": null,
+      "website": "https://websiteonly.io",
+      "verified_at": null
+    }
+  },
+  {
+    "name": "All Nullable Null",
+    "email": "allnull@test.com",
+    "country": null,
+    "profile": {
+      "bio": null,
+      "website": null,
+      "verified_at": null
+    }
+  },
+  {
+    "name": "Verified Only",
+    "email": "verified@test.com",
+    "country": "Germany",
+    "profile": {
+      "bio": null,
+      "website": null,
+      "verified_at": "2024-12-01 00:00:00"
+    }
+  },
+  {
+    "name": "Full Everything",
+    "email": "full@test.com",
+    "country": "Japan",
+    "profile": {
+      "bio": "Complete biography with all details",
+      "website": "https://fulleverything.jp",
+      "verified_at": "2024-06-15 14:30:00"
+    }
+  }
+]
+

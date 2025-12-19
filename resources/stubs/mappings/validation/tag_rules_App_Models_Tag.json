@@ -1,0 +1,72 @@
+{
+    "name": "",
+    "description": null,
+    "source_schema": {
+        "columns": {
+            "name": {
+                "name": "name",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 11,
+                "min": null,
+                "max": null,
+                "examples": [
+                    "Fiction",
+                    "A",
+                    "Science Fiction",
+                    "This tag name is way too long and should exceed fifty characters maximum",
+                    "Valid Tag"
+                ]
+            },
+            "slug": {
+                "name": "slug",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 10,
+                "min": null,
+                "max": null,
+                "examples": [
+                    "fiction",
+                    "a",
+                    "science-fiction",
+                    "toolong-slug",
+                    "valid_tag"
+                ]
+            }
+        },
+        "total_rows": 11
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\Tag",
+            "columns": [
+                {
+                    "source": "name",
+                    "target": "name",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|min:2|max:50",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "slug",
+                    "target": "slug",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|alpha_dash|max:50|unique:tags,slug",
+                    "relation_lookup": null
+                }
+            ],
+            "options": {
+                "unique_key": "slug",
+                "duplicate_strategy": "update"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T21:49:57+00:00",
+    "updated_at": "2025-12-18T21:49:57+00:00"
+}

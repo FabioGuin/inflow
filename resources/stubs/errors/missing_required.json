@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Complete Author",
+    "email": "complete@test.com",
+    "country": "USA"
+  },
+  {
+    "name": "Missing Email",
+    "email": null,
+    "country": "UK"
+  },
+  {
+    "name": null,
+    "email": "noname@test.com",
+    "country": "Canada"
+  },
+  {
+    "email": "nothingelse@test.com"
+  },
+  {
+    "name": "Empty Email",
+    "email": "",
+    "country": "France"
+  },
+  {
+    "name": "",
+    "email": "emptyname@test.com",
+    "country": "Germany"
+  },
+  {
+    "name": "  ",
+    "email": "whitespace@test.com",
+    "country": "Japan"
+  },
+  {
+    "name": "Valid After Errors",
+    "email": "valid@test.com",
+    "country": "Brazil"
+  },
+  {
+    "name": "Another Missing",
+    "country": "India"
+  },
+  {
+    "name": "Last Valid",
+    "email": "last@test.com",
+    "country": null
+  }
+]
+

@@ -1,0 +1,4 @@
+title,isbn,price,published_at,is_active,author_name
+Valid Book,978-3333333331,10.99,2020-01-01,true,Test Author
+Invalid Price,978-3333333332,not_a_number,2020-01-01,true,Test Author
+Invalid Date,978-3333333333,10.99,invalid_date,true,Test Author

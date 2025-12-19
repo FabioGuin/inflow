@@ -1,0 +1,12 @@
+title,isbn,price,published_at,is_active,author_name
+The Great Gatsby,978-0743273565,12.99,1925-04-10,true,F. Scott Fitzgerald
+1984,978-0451524935,9.99,1949-06-08,true,George Orwell
+To Kill a Mockingbird,978-0061120084,14.99,1960-07-11,true,Harper Lee
+Pride and Prejudice,978-0141439518,8.99,1813-01-28,true,Jane Austen
+The Catcher in the Rye,978-0316769488,11.99,1951-07-16,true,J.D. Salinger
+Brave New World,978-0060850524,10.99,1932-01-01,true,Aldous Huxley
+Animal Farm,978-0451526342,7.99,1945-08-17,true,George Orwell
+The Hobbit,978-0547928227,15.99,1937-09-21,true,J.R.R. Tolkien
+Fahrenheit 451,978-1451673319,13.99,1953-10-19,true,Ray Bradbury
+Lord of the Flies,978-0399501487,12.49,1954-09-17,true,William Golding
+

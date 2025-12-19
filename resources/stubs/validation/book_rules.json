@@ -1,0 +1,83 @@
+[
+  {
+    "title": "Valid Book",
+    "isbn": "978-1234567890",
+    "price": 19.99,
+    "published_at": "2023-01-15",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "",
+    "isbn": "978-2234567890",
+    "price": 15.99,
+    "published_at": "2022-06-20",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "Invalid ISBN Format",
+    "isbn": "123-4567890123",
+    "price": 12.99,
+    "published_at": "2021-03-10",
+    "is_active": false,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "ISBN Too Short",
+    "isbn": "978-123",
+    "price": 9.99,
+    "published_at": "2020-12-01",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "Negative Price",
+    "isbn": "978-3234567890",
+    "price": -5.00,
+    "published_at": "2019-08-15",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "Price Too High",
+    "isbn": "978-4234567890",
+    "price": 99999.99,
+    "published_at": "2018-04-22",
+    "is_active": false,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "Future Publication Date",
+    "isbn": "978-5234567890",
+    "price": 24.99,
+    "published_at": "2099-12-31",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "Duplicate ISBN",
+    "isbn": "978-1234567890",
+    "price": 29.99,
+    "published_at": "2017-07-04",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  },
+  {
+    "title": "Unknown Author",
+    "isbn": "978-6234567890",
+    "price": 14.99,
+    "published_at": "2016-02-28",
+    "is_active": false,
+    "author_email": "unknown@nowhere.com"
+  },
+  {
+    "title": "All Valid Book",
+    "isbn": "978-7234567890",
+    "price": 18.50,
+    "published_at": "2024-01-01",
+    "is_active": true,
+    "author_email": "author1@test.com"
+  }
+]
+

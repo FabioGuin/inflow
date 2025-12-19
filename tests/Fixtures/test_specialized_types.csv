@@ -1,0 +1,4 @@
+name,email,website,phone,ip_address,uuid,age
+John,john@example.com,https://example.com,+39 123 456 7890,192.168.1.1,550e8400-e29b-41d4-a716-446655440000,30
+Jane,jane@test.org,www.test.org,123-456-7890,10.0.0.1,6ba7b810-9dad-11d1-80b4-00c04fd430c8,25
+Bob,bob@company.com,http://company.com,+1 (555) 123-4567,172.16.0.1,6ba7b811-9dad-11d1-80b4-00c04fd430c8,35

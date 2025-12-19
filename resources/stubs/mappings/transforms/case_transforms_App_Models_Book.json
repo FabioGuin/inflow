@@ -1,0 +1,124 @@
+{
+    "name": "Case Transforms Test",
+    "description": "Test mapping for case transformation (camel_case, snake_case, title, upper, lower, capitalize, slugify, strip_tags, truncate, prefix, suffix)",
+    "source_schema": {
+        "columns": {
+            "title": {
+                "name": "title",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "CamelCase Test",
+                    "SnakeCase Test",
+                    "TitleCase Test"
+                ]
+            },
+            "raw_title": {
+                "name": "raw_title",
+                "type": "string",
+                "null_count": 1,
+                "unique_count": 10,
+                "examples": [
+                    "hello world example",
+                    "HelloWorld",
+                    "the quick brown fox"
+                ]
+            },
+            "author_name": {
+                "name": "author_name",
+                "type": "string",
+                "null_count": 1,
+                "unique_count": 9,
+                "examples": [
+                    "John Smith",
+                    "Jane Doe",
+                    "Bob Johnson"
+                ]
+            },
+            "description_html": {
+                "name": "description_html",
+                "type": "string",
+                "null_count": 1,
+                "unique_count": 10,
+                "examples": [
+                    "<p>Some <b>HTML</b> content</p>",
+                    "<script>alert('xss')</script><p>Safe text</p>",
+                    "<div class='test'>Nested <span>tags</span></div>"
+                ]
+            },
+            "long_text": {
+                "name": "long_text",
+                "type": "string",
+                "null_count": 1,
+                "unique_count": 10,
+                "examples": [
+                    "This is a very long text that should be truncated at some point to test the truncate transform functionality",
+                    "Another long piece of text for testing purposes that exceeds the normal length we would want to display",
+                    "Short text"
+                ]
+            },
+            "isbn": {
+                "name": "isbn",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "978-1111111111",
+                    "978-2222222222",
+                    "978-3333333333"
+                ]
+            }
+        },
+        "total_rows": 10
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\Book",
+            "columns": [
+                {
+                    "source": "raw_title",
+                    "target": "title",
+                    "transforms": [
+                        "trim",
+                        "title"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|min:1|max:255",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "__default_author_id",
+                    "target": "author_id",
+                    "transforms": [],
+                    "default": "1",
+                    "validation_rule": "required|exists:authors,id",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "isbn",
+                    "target": "isbn",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "__default_price",
+                    "target": "price",
+                    "transforms": [],
+                    "default": "0.00",
+                    "validation_rule": "required|numeric|min:0|max:9999.99",
+                    "relation_lookup": null
+                }
+            ],
+            "options": {
+                "unique_key": "isbn",
+                "duplicate_strategy": "update"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T15:00:00+00:00",
+    "updated_at": "2025-12-18T15:00:00+00:00"
+}
+

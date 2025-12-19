@@ -1,0 +1,80 @@
+{
+    "name": "Invalid Foreign Key Test",
+    "description": "Test mapping for invalid foreign key lookups",
+    "source_schema": {
+        "columns": {
+            "title": {"name": "title", "type": "string"},
+            "isbn": {"name": "isbn", "type": "string"},
+            "price": {"name": "price", "type": "float"},
+            "published_at": {"name": "published_at", "type": "date"},
+            "is_active": {"name": "is_active", "type": "boolean"},
+            "author_email": {"name": "author_email", "type": "email"}
+        },
+        "total_rows": 10
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\Book",
+            "columns": [
+                {
+                    "source": "title",
+                    "target": "title",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|string|min:1|max:255",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "isbn",
+                    "target": "isbn",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "price",
+                    "target": "price",
+                    "transforms": ["trim"],
+                    "default": null,
+                    "validation_rule": "required|numeric|min:0|max:9999.99",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "published_at",
+                    "target": "published_at",
+                    "transforms": ["trim", "cast:date"],
+                    "default": null,
+                    "validation_rule": "nullable|date|before_or_equal:today",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "is_active",
+                    "target": "is_active",
+                    "transforms": ["trim", "cast:bool"],
+                    "default": null,
+                    "validation_rule": "boolean",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "author_email",
+                    "target": "author.email",
+                    "transforms": ["trim", "lower"],
+                    "default": null,
+                    "validation_rule": null,
+                    "relation_lookup": {
+                        "field": "email",
+                        "create_if_missing": false
+                    }
+                }
+            ],
+            "options": {
+                "unique_key": "isbn",
+                "duplicate_strategy": "update"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T22:00:00+00:00",
+    "updated_at": "2025-12-18T22:00:00+00:00"
+}
+

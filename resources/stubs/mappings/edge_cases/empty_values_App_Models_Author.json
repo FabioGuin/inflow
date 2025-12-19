@@ -1,0 +1,115 @@
+{
+    "name": "Empty Values Edge Cases Test",
+    "description": "Test mapping for handling empty values, null values, quoted empty strings, whitespace-only values",
+    "source_schema": {
+        "columns": {
+            "name": {
+                "name": "name",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "Normal Entry",
+                    "Empty Country",
+                    "Empty Bio"
+                ]
+            },
+            "email": {
+                "name": "email",
+                "type": "email",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "normal@test.com",
+                    "empty@test.com",
+                    "emptybio@test.com"
+                ]
+            },
+            "country": {
+                "name": "country",
+                "type": "string",
+                "null_count": 5,
+                "unique_count": 6,
+                "examples": [
+                    "USA",
+                    "",
+                    null
+                ]
+            },
+            "bio": {
+                "name": "bio",
+                "type": "string",
+                "null_count": 4,
+                "unique_count": 7,
+                "examples": [
+                    "A normal bio",
+                    "",
+                    null
+                ]
+            },
+            "website": {
+                "name": "website",
+                "type": "string",
+                "null_count": 4,
+                "unique_count": 7,
+                "examples": [
+                    "https://normal.com",
+                    "",
+                    null
+                ]
+            }
+        },
+        "total_rows": 10
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\Author",
+            "columns": [
+                {
+                    "source": "name",
+                    "target": "name",
+                    "transforms": [
+                        "trim",
+                        "null_if_empty"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|min:2|max:100",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "email",
+                    "target": "email",
+                    "transforms": [
+                        "trim",
+                        "lower",
+                        "null_if_empty"
+                    ],
+                    "default": null,
+                    "validation_rule": "nullable|email|unique:authors,email",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "country",
+                    "target": "country",
+                    "transforms": [
+                        "trim",
+                        "upper",
+                        "truncate:2",
+                        "null_if_empty",
+                        "default:XX"
+                    ],
+                    "default": "XX",
+                    "validation_rule": "nullable|string|size:2|alpha",
+                    "relation_lookup": null
+                }
+            ],
+            "options": {
+                "unique_key": "email",
+                "duplicate_strategy": "update"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T15:00:00+00:00",
+    "updated_at": "2025-12-18T15:00:00+00:00"
+}
+

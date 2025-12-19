@@ -1,0 +1,12 @@
+title,isbn,price,published_at,is_active,author_email
+Book With Valid Author,978-1111111111,19.99,2023-05-15,true,existing@authors.com
+Book With Unknown Author,978-2222222222,15.99,2022-11-20,true,notfound@nowhere.com
+Another Valid,978-3333333333,12.99,2021-06-30,true,existing@authors.com
+FK to Empty Email,978-4444444444,10.99,2020-12-25,true,
+FK to Null,978-5555555555,8.99,2019-03-14,true,
+Typo in Email,978-6666666666,14.99,2018-08-08,true,existng@authors.com
+Case Sensitive FK,978-7777777777,11.99,2017-04-01,true,EXISTING@AUTHORS.COM
+Extra Spaces FK,978-8888888888,9.99,2016-09-21,true, existing@authors.com 
+Valid Again,978-9999999999,20.00,2015-02-14,true,existing@authors.com
+Last Unknown,978-0000000000,5.99,2024-01-01,true,random@unknown.org
+

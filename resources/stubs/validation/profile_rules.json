@@ -1,0 +1,51 @@
+[
+  {
+    "author_email": "profile1@test.com",
+    "bio": "A short valid bio",
+    "website": "https://valid-website.com",
+    "verified_at": "2024-01-15 10:30:00"
+  },
+  {
+    "author_email": "profile2@test.com",
+    "bio": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. This bio is intentionally over 1000 characters to test max length validation rule and should fail.",
+    "website": "https://toolong.com",
+    "verified_at": null
+  },
+  {
+    "author_email": "profile3@test.com",
+    "bio": "Bio with invalid website",
+    "website": "not-a-valid-url",
+    "verified_at": "2023-06-01 08:00:00"
+  },
+  {
+    "author_email": "profile4@test.com",
+    "bio": null,
+    "website": "ftp://wrong-protocol.com",
+    "verified_at": null
+  },
+  {
+    "author_email": "unknown@nowhere.com",
+    "bio": "Bio for unknown author",
+    "website": "https://unknown.com",
+    "verified_at": null
+  },
+  {
+    "author_email": "profile5@test.com",
+    "bio": "Valid bio",
+    "website": null,
+    "verified_at": "invalid-date-format"
+  },
+  {
+    "author_email": "profile6@test.com",
+    "bio": "All nulls are valid",
+    "website": null,
+    "verified_at": null
+  },
+  {
+    "author_email": "profile7@test.com",
+    "bio": "Complete valid profile",
+    "website": "https://complete.org",
+    "verified_at": "2024-12-01 00:00:00"
+  }
+]
+
