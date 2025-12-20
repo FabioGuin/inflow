@@ -5,9 +5,12 @@ namespace InFlow\Services;
 use InFlow\Commands\InFlowCommand;
 use InFlow\Contracts\ReaderInterface;
 use InFlow\Detectors\FormatDetector;
+use InFlow\Enums\File\SourceType;
+use InFlow\Enums\Flow\ErrorPolicy;
 use InFlow\Executors\FlowExecutor;
 use InFlow\Loaders\EloquentLoader;
 use InFlow\Mappings\MappingBuilder;
+use InFlow\Mappings\MappingSerializer;
 use InFlow\Mappings\MappingValidator;
 use InFlow\Profilers\Profiler;
 use InFlow\Readers\CsvReader;
@@ -15,8 +18,6 @@ use InFlow\Readers\ExcelReader;
 use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
 use InFlow\Services\Core\ConfigurationResolver;
-use InFlow\Enums\Flow\ErrorPolicy;
-use InFlow\Enums\File\SourceType;
 use InFlow\Services\Core\FlowExecutionService;
 use InFlow\Services\DataProcessing\SanitizationService;
 use InFlow\Services\File\FileReaderService;
@@ -24,14 +25,13 @@ use InFlow\Services\File\FileWriterService;
 use InFlow\Services\Loading\PivotSyncService;
 use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Services\Mapping\MappingGenerationService;
-use InFlow\Mappings\MappingSerializer;
 use InFlow\Sources\FileSource;
+use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
 use InFlow\ValueObjects\Flow\FlowRun;
 use InFlow\ValueObjects\Flow\ProcessingContext;
 use InFlow\ValueObjects\Mapping\MappingDefinition;
-use InFlow\ValueObjects\Data\SourceSchema;
 
 /**
  * Simplified ETL orchestrator that replaces the pipeline and pipes.
@@ -160,7 +160,7 @@ readonly class ETLOrchestrator
         $command->infoLine('<fg=blue>Step 2/8:</> <fg=gray>Reading file content...</>');
 
         $content = $this->readFileContent($command, $context->source);
-            $lineCount = $this->countLines($content);
+        $lineCount = $this->countLines($content);
 
         $context = $context
             ->withContent($content)
@@ -221,6 +221,7 @@ readonly class ETLOrchestrator
         }
 
         $command->warning('Sanitization skipped');
+
         return $context->withShouldSanitize(false);
     }
 
@@ -297,6 +298,7 @@ readonly class ETLOrchestrator
         if ($context->reader === null) {
             $command->warning('Profiling skipped (no data reader available)');
             $command->newLine();
+
             return $context;
         }
 
@@ -336,6 +338,7 @@ readonly class ETLOrchestrator
         if ($context->reader === null || $context->sourceSchema === null) {
             $command->warning('Mapping skipped (no schema available)');
             $command->newLine();
+
             return $context;
         }
 
@@ -382,6 +385,7 @@ readonly class ETLOrchestrator
     {
         if ($context->mappingDefinition === null || $context->reader === null || $context->format === null) {
             $command->warning('Flow execution skipped (no mapping available)');
+
             return $context;
         }
 
@@ -442,7 +446,7 @@ readonly class ETLOrchestrator
 
     private function readFileContentWithProgress(InFlowCommand $command, FileSource $source, int $fileSize): string
     {
-        $progressBar = progress(
+        $progressBar = \Laravel\Prompts\progress(
             label: 'Reading file',
             steps: $fileSize
         );
@@ -460,22 +464,22 @@ readonly class ETLOrchestrator
         return $content;
     }
 
-    private function readCsvData(InFlowCommand $command, FileSource $source, DetectedFormat $format): CsvReader
+    private function readCsvData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
     {
         return $this->readDataWithPreview($command, new CsvReader($source, $format));
     }
 
-    private function readExcelData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ExcelReader
+    private function readExcelData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
     {
         return $this->readDataWithPreview($command, new ExcelReader($source, $format));
     }
 
-    private function readJsonData(InFlowCommand $command, FileSource $source, DetectedFormat $format): JsonLinesReader
+    private function readJsonData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
     {
         return $this->readDataWithPreview($command, new JsonLinesReader($source, $format));
     }
 
-    private function readXmlData(InFlowCommand $command, FileSource $source, DetectedFormat $format): XmlReader
+    private function readXmlData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
     {
         return $this->readDataWithPreview($command, new XmlReader($source));
     }
@@ -622,6 +626,7 @@ readonly class ETLOrchestrator
                 $command->newLine();
                 $command->success('Quality Report: No issues detected');
             }
+
             return;
         }
 
@@ -648,7 +653,6 @@ readonly class ETLOrchestrator
         $command->newLine();
     }
 
-
     private function displayFlowRunResults(InFlowCommand $command, FlowRun $run): void
     {
         if ($command->isQuiet()) {
@@ -667,13 +671,13 @@ readonly class ETLOrchestrator
         };
 
         $command->line("{$statusIcon} Status: <fg=white>{$run->status->value}</>");
-        $command->line("  Imported: <fg=yellow>".number_format($run->importedRows)."</>");
-        $command->line("  Skipped: <fg=yellow>".number_format($run->skippedRows)."</>");
-        $command->line("  Errors: <fg=yellow>".number_format($run->errorCount)."</>");
+        $command->line('  Imported: <fg=yellow>'.number_format($run->importedRows).'</>');
+        $command->line('  Skipped: <fg=yellow>'.number_format($run->skippedRows).'</>');
+        $command->line('  Errors: <fg=yellow>'.number_format($run->errorCount).'</>');
 
         $duration = $run->getDuration();
         if ($duration !== null) {
-            $command->line("  Duration: <fg=yellow>".round($duration, 2)."s</>");
+            $command->line('  Duration: <fg=yellow>'.round($duration, 2).'s</>');
         }
 
         $command->newLine();
@@ -768,6 +772,7 @@ readonly class ETLOrchestrator
 
         if ($modelClass === null) {
             $command->error('Model class is required. Use: inflow:process file.csv App\\Models\\User');
+
             return null;
         }
 
@@ -776,10 +781,12 @@ readonly class ETLOrchestrator
             try {
                 $mapping = $this->mappingSerializer->loadFromFile($mappingPath);
                 $command->infoLine('<fg=green>✓ Mapping loaded from:</> <fg=yellow>'.$mappingPath.'</>');
+
                 return $mapping;
             } catch (\Exception $e) {
                 \inflow_report($e, 'error', ['operation' => 'loadMapping', 'path' => $mappingPath]);
                 $command->error('Failed to load mapping: '.$e->getMessage());
+
                 return null;
             }
         }
@@ -794,6 +801,7 @@ readonly class ETLOrchestrator
                 try {
                     $mapping = $this->mappingSerializer->loadFromFile($existingMappingPath);
                     $command->infoLine('<fg=green>✓ Mapping loaded from:</> <fg=yellow>'.$existingMappingPath.'</> (auto-detected)');
+
                     return $mapping;
                 } catch (\Exception $e) {
                     \inflow_report($e, 'warning', ['operation' => 'loadExistingMapping', 'model' => $modelClass]);
@@ -808,7 +816,7 @@ readonly class ETLOrchestrator
             $mapping = $this->mappingBuilder->autoMapInteractive(
                 schema: $sourceSchema,
                 modelClass: $modelClass,
-                interactiveCallback: function ($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation = false, $isArrayRelation = false, $columnMeta = null) use ($command, $modelClass) {
+                interactiveCallback: function ($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation = false, $isArrayRelation = false, $columnMeta = null) use ($command) {
                     // Simplified mapping interaction - delegate to command if needed
                     return $command->choice(
                         "Map '{$sourceColumn}' to:",
@@ -816,7 +824,7 @@ readonly class ETLOrchestrator
                         $suggestedPath
                     );
                 },
-                transformCallback: function ($sourceColumn, $targetPath, $suggestedTransforms, $columnMeta, $targetType = null, $modelClassParam = null) use ($modelClass) {
+                transformCallback: function ($sourceColumn, $targetPath, $suggestedTransforms, $columnMeta, $targetType = null, $modelClassParam = null) {
                     return $suggestedTransforms; // Simplified - just use suggested
                 }
             );
@@ -844,6 +852,7 @@ readonly class ETLOrchestrator
         } catch (\Exception $e) {
             \inflow_report($e, 'error', ['operation' => 'generateMapping', 'model' => $modelClass]);
             $command->error('Failed to generate mapping: '.$e->getMessage());
+
             return null;
         }
     }
@@ -889,4 +898,3 @@ readonly class ETLOrchestrator
         ];
     }
 }
-
