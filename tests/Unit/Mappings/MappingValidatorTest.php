@@ -4,9 +4,9 @@ namespace InFlow\Tests\Unit\Mappings;
 
 use InFlow\Mappings\MappingValidator;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\Row;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\Row;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class MappingValidatorTest extends TestCase
 {

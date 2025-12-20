@@ -6,7 +6,7 @@ use InFlow\Detectors\FormatDetector;
 use InFlow\Enums\FileType;
 use InFlow\Sources\FileSource;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 class FormatDetectorTest extends TestCase
 {

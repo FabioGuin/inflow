@@ -3,8 +3,8 @@
 namespace InFlow\Tests\Unit\ValueObjects;
 
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class ModelMappingTest extends TestCase
 {

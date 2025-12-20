@@ -2,7 +2,7 @@
 
 namespace InFlow\Tests\Unit\ValueObjects;
 
-use InFlow\ValueObjects\ColumnMapping;
+use InFlow\ValueObjects\Data\ColumnMapping;
 use PHPUnit\Framework\TestCase;
 
 class ColumnMappingTest extends TestCase

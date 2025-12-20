@@ -5,9 +5,9 @@ namespace InFlow\Tests\Unit\Mappings;
 use InFlow\Enums\ColumnType;
 use InFlow\Mappings\MappingBuilder;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMetadata;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\SourceSchema;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
 
 class MappingBuilderTest extends TestCase
 {

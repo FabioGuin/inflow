@@ -4,11 +4,11 @@ namespace InFlow\Tests\Unit\ValueObjects;
 
 use InFlow\Enums\ColumnType;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ColumnMetadata;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\SourceSchema;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class MappingDefinitionTest extends TestCase
 {

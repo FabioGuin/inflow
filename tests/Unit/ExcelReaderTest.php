@@ -5,7 +5,7 @@ namespace InFlow\Tests\Unit;
 use InFlow\Enums\FileType;
 use InFlow\Readers\ExcelReader;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 use Orchestra\Testbench\TestCase;
 
 class ExcelReaderTest extends TestCase

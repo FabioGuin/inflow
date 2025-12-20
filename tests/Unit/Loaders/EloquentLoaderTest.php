@@ -7,9 +7,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use InFlow\Loaders\EloquentLoader;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\Row;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\Row;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class EloquentLoaderTest extends TestCase
 {

@@ -7,7 +7,7 @@ use InFlow\Enums\FileType;
 use InFlow\Readers\CsvReader;
 use InFlow\Sources\FileSource;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 class CsvReaderTest extends TestCase
 {

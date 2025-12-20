@@ -3,7 +3,7 @@
 namespace InFlow\Tests\Unit\ValueObjects;
 
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\Row;
+use InFlow\ValueObjects\Data\Row;
 
 class RowTest extends TestCase
 {

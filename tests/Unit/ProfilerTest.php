@@ -8,7 +8,7 @@ use InFlow\Profilers\Profiler;
 use InFlow\Readers\CsvReader;
 use InFlow\Sources\FileSource;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 class ProfilerTest extends TestCase
 {

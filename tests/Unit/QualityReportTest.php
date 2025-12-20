@@ -2,7 +2,7 @@
 
 namespace InFlow\Tests\Unit;
 
-use InFlow\ValueObjects\QualityReport;
+use InFlow\ValueObjects\Data\QualityReport;
 use Orchestra\Testbench\TestCase;
 
 class QualityReportTest extends TestCase

@@ -5,11 +5,11 @@ namespace InFlow\Tests\Unit\Mappings;
 use InFlow\Enums\ColumnType;
 use InFlow\Mappings\MappingSerializer;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ColumnMetadata;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\SourceSchema;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class MappingSerializerTest extends TestCase
 {

@@ -3,9 +3,9 @@
 namespace InFlow\Tests\Unit\ValueObjects;
 
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\Flow;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\ValueObjects\Flow\Flow;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class FlowTest extends TestCase
 {

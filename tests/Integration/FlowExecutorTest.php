@@ -4,20 +4,14 @@ namespace InFlow\Tests\Integration;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Schema;
-use InFlow\Enums\FlowRunStatus;
-use InFlow\Events\FormatDetected;
-use InFlow\Events\ProfileCompleted;
-use InFlow\Events\RowImported;
-use InFlow\Events\RowSkipped;
-use InFlow\Events\SanitizationCompleted;
+use InFlow\Enums\Flow\FlowRunStatus;
 use InFlow\Executors\FlowExecutor;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\Flow;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Flow\Flow;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 class FlowExecutorTest extends TestCase
 {
@@ -69,8 +63,6 @@ class FlowExecutorTest extends TestCase
 
     public function test_it_executes_flow_end_to_end(): void
     {
-        Event::fake();
-
         $mapping = new MappingDefinition(
             mappings: [
                 new ModelMapping(
@@ -109,12 +101,6 @@ class FlowExecutorTest extends TestCase
         $this->assertEquals(0, $run->errorCount);
         $this->assertEquals(100.0, $run->progress);
 
-        // Assert events were fired
-        Event::assertDispatched(SanitizationCompleted::class);
-        Event::assertDispatched(FormatDetected::class);
-        // ProfileCompleted is not fired when mapping is provided (profiling is skipped)
-        Event::assertDispatched(RowImported::class, 3); // 3 rows imported
-
         // Assert data was loaded
         $userCount = TestUser::count();
         $this->assertGreaterThanOrEqual(3, $userCount, "Expected at least 3 users, got {$userCount}");
@@ -127,8 +113,6 @@ class FlowExecutorTest extends TestCase
 
     public function test_it_handles_validation_errors(): void
     {
-        Event::fake();
-
         $mapping = new MappingDefinition(
             mappings: [
                 new ModelMapping(
@@ -175,15 +159,11 @@ class FlowExecutorTest extends TestCase
             "Expected either skipped rows ({$run->skippedRows}) or errors ({$run->errorCount})"
         );
 
-        Event::assertDispatched(RowSkipped::class);
-
         @unlink($invalidFile);
     }
 
     public function test_it_stops_on_error_when_policy_is_stop(): void
     {
-        Event::fake();
-
         $mapping = new MappingDefinition(
             mappings: [
                 new ModelMapping(

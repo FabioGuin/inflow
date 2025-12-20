@@ -4,7 +4,7 @@ namespace InFlow\Tests\Unit\ValueObjects;
 
 use InFlow\Enums\FlowRunStatus;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\FlowRun;
+use InFlow\ValueObjects\Flow\FlowRun;
 
 class FlowRunTest extends TestCase
 {

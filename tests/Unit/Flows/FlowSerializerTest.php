@@ -4,7 +4,7 @@ namespace InFlow\Tests\Unit\Flows;
 
 use InFlow\Flows\FlowSerializer;
 use InFlow\Tests\TestCase;
-use InFlow\ValueObjects\Flow;
+use InFlow\ValueObjects\Flow\Flow;
 
 class FlowSerializerTest extends TestCase
 {
