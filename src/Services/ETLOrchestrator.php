@@ -26,6 +26,7 @@ use InFlow\Services\Loading\PivotSyncService;
 use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Services\Mapping\MappingGenerationService;
 use InFlow\Sources\FileSource;
+use InFlow\ValueObjects\Data\QualityReport;
 use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
@@ -619,7 +620,7 @@ readonly class ETLOrchestrator
         $command->table($headers, $tableData);
     }
 
-    private function displayQualityReport(InFlowCommand $command, \InFlow\ValueObjects\QualityReport $qualityReport): void
+    private function displayQualityReport(InFlowCommand $command, QualityReport $qualityReport): void
     {
         if ($command->isQuiet() || ! $qualityReport->hasIssues()) {
             if (! $command->isQuiet() && ! $qualityReport->hasIssues()) {
