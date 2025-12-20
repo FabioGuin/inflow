@@ -4,10 +4,9 @@ namespace InFlow\Commands\Interactions;
 
 use Illuminate\Support\Facades\DB;
 use InFlow\Commands\InFlowCommand;
-use InFlow\Enums\DuplicateStrategy;
-use InFlow\Services\Core\InFlowConsoleServices;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\Enums\Data\DuplicateStrategy;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 use function Laravel\Prompts\select;
 
@@ -17,9 +16,10 @@ use function Laravel\Prompts\select;
 class DuplicateHandlingInteraction
 {
     public function __construct(
-        private readonly InFlowCommand $command,
-        private readonly InFlowConsoleServices $services
-    ) {}
+        private readonly InFlowCommand $command
+    ) {
+        // No services needed - all logic is self-contained
+    }
 
     /**
      * Configure duplicate handling for a mapping.

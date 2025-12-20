@@ -4,7 +4,7 @@ namespace InFlow\Readers;
 
 use InFlow\Contracts\ReaderInterface;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 /**
  * CSV reader with streaming support for large files

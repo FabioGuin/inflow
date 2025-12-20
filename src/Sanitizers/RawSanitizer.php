@@ -4,8 +4,8 @@ namespace InFlow\Sanitizers;
 
 use InFlow\Contracts\SanitizationReportInterface;
 use InFlow\Contracts\SanitizerInterface;
-use InFlow\Enums\BomType;
-use InFlow\Enums\NewlineFormat;
+use InFlow\Enums\File\BomType;
+use InFlow\Enums\File\NewlineFormat;
 use InFlow\Services\Core\ConfigurationResolver;
 
 /**

@@ -4,8 +4,8 @@ namespace InFlow\Mappings;
 
 use Illuminate\Support\Facades\Validator;
 use InFlow\Transforms\TransformEngine;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\Row;
+use InFlow\ValueObjects\Data\Row;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Validator for mapping definitions using Laravel validation

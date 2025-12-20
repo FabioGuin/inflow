@@ -3,9 +3,9 @@
 namespace InFlow\Readers;
 
 use InFlow\Contracts\ReaderInterface;
-use InFlow\Enums\FileType;
+use InFlow\Enums\File\FileType;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Reader\Exception as ReaderException;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;

@@ -4,7 +4,7 @@ namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
 use InFlow\Constants\DisplayConstants;
-use InFlow\Enums\ConfigKey;
+use InFlow\Enums\Config\ConfigKey;
 
 readonly class GuidedSetupInteraction
 {

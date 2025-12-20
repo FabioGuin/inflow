@@ -13,8 +13,10 @@ use InFlow\Commands\Traits\Core\HandlesUtility;
 // Data Processing Traits
 use InFlow\Commands\Traits\DataProcessing\HandlesSanitization;
 use InFlow\Commands\Traits\File\HandlesFileSelection;
-use InFlow\Services\Core\InFlowConsoleServices;
-use InFlow\Services\Core\InFlowPipelineRunner;
+use InFlow\Services\Core\ConfigurationResolver;
+use InFlow\Services\ETLOrchestrator;
+use InFlow\Services\File\FileSelectionService;
+use InFlow\Services\Formatter\SummaryFormatterService;
 
 class InFlowCommand extends Command
 {
@@ -30,8 +32,10 @@ class InFlowCommand extends Command
      * Create a new command instance.
      */
     public function __construct(
-        private readonly InFlowConsoleServices $services,
-        private readonly InFlowPipelineRunner $pipelineRunner
+        private readonly ConfigurationResolver $configResolver,
+        private readonly FileSelectionService $fileSelectionService,
+        private readonly SummaryFormatterService $summaryFormatter,
+        private readonly ETLOrchestrator $orchestrator
     ) {
         parent::__construct();
     }
@@ -90,7 +94,7 @@ class InFlowCommand extends Command
             $filePath = $this->requireFilePath();
             $context = $this->createProcessingContext($filePath, $startTime);
 
-            $context = $this->pipelineRunner->run($this, $context);
+            $context = $this->orchestrator->process($this, $context);
 
             $this->displayProcessingSummary($context, $startTime);
 

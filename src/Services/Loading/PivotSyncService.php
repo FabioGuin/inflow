@@ -6,9 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use InFlow\Services\Loading\ModelPersistenceService;
 use InFlow\Transforms\TransformEngine;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\Row;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\Row;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Service for synchronizing many-to-many pivot relations.

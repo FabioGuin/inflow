@@ -2,8 +2,8 @@
 
 namespace InFlow\Services\Core;
 
-use InFlow\Enums\ConfigKey;
-use InFlow\Enums\NewlineFormat;
+use InFlow\Enums\Config\ConfigKey;
+use InFlow\Enums\File\NewlineFormat;
 use InFlow\Sanitizers\SanitizerConfigKeys;
 
 class ConfigurationResolver

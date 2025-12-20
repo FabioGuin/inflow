@@ -2,8 +2,8 @@
 
 namespace InFlow\Services\Mapping;
 
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Validates mapping dependencies and execution order.

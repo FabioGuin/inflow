@@ -12,16 +12,13 @@ use InFlow\Readers\CsvReader;
 use InFlow\Readers\ExcelReader;
 use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
-use InFlow\Services\Core\FlowEventService;
 use InFlow\Services\Core\FlowExecutionService;
-use InFlow\Services\Core\FlowRunBuilderService;
-use InFlow\Services\Formatter\FlowWarningFormatterService;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
-use InFlow\ValueObjects\Flow;
-use InFlow\ValueObjects\FlowRun;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\Row;
+use InFlow\ValueObjects\File\DetectedFormat;
+use InFlow\ValueObjects\Flow\Flow;
+use InFlow\ValueObjects\Flow\FlowRun;
+use InFlow\ValueObjects\Mapping\ModelMapping;
+use InFlow\ValueObjects\Data\Row;
 
 /**
  * Executor for orchestrating the complete ETL pipeline
@@ -32,7 +29,6 @@ use InFlow\ValueObjects\Row;
  * Features:
  * - Chunking for large files
  * - Error handling and recovery
- * - Event emission at each step
  * - Progress tracking via FlowRun
  * - Structured logging
  */
@@ -57,9 +53,6 @@ class FlowExecutor
 
     public function __construct(
         private readonly FlowExecutionService $flowExecutionService,
-        private readonly FlowRunBuilderService $flowRunBuilderService,
-        private readonly FlowEventService $flowEventService,
-        private readonly FlowWarningFormatterService $warningFormatter,
         private readonly Profiler $profiler,
         private readonly EloquentLoader $loader,
         private readonly MappingValidator $mappingValidator,
@@ -142,7 +135,6 @@ class FlowExecutor
             $run = FlowRun::create($sourceFile)->fail(
                 'Flow validation failed: '.implode(', ', $errors)
             );
-            $this->flowEventService->emitRunFailed($sourceFile, $run->errors[0]['message'] ?? 'Validation failed');
 
             return $run;
         }
@@ -154,7 +146,6 @@ class FlowExecutor
                 $run = FlowRun::create($sourceFile)->fail(
                     'Mapping dependency validation failed: '.implode(', ', $dependencyErrors)
                 );
-                $this->flowEventService->emitRunFailed($sourceFile, $run->errors[0]['message'] ?? 'Dependency validation failed');
 
                 return $run;
             }
@@ -179,11 +170,6 @@ class FlowExecutor
         try {
             // Business logic: prepare source file (sanitize if needed)
             [$source, $tempFile, $report] = $this->flowExecutionService->prepareSourceFile($sourceFile, $flow->sanitizerConfig);
-
-            // Presentation: emit sanitization event if sanitization was performed
-            if ($report !== null) {
-                $this->flowEventService->emitSanitizationCompleted($sourceFile, $report);
-            }
 
             return [$source, $tempFile];
         } catch (\RuntimeException $e) {
@@ -211,9 +197,6 @@ class FlowExecutor
         // Business logic: detect format
         $format = $this->flowExecutionService->detectFormat($source, $flow->formatConfig);
 
-        // Presentation: emit format detected event
-        $this->flowEventService->emitFormatDetected($sourceFile, $format);
-
         // Business logic: create reader
         $reader = $this->flowExecutionService->createReader($source, $format);
         if ($reader === null) {
@@ -226,7 +209,7 @@ class FlowExecutor
         $totalRows = $this->flowExecutionService->countRows($reader);
 
         // Business logic: update run with format and total rows
-        $run = $this->flowRunBuilderService->updateWithFormat($run, $format, $totalRows);
+        $run = $run->withFormat($format, $totalRows);
 
         return [$reader, $format, $run];
     }
@@ -255,11 +238,8 @@ class FlowExecutor
         $schema = $profileResult['schema'];
         $qualityReport = $profileResult['quality_report'];
 
-        // Presentation: emit profile completed event
-        $this->flowEventService->emitProfileCompleted($sourceFile, $schema, $qualityReport);
-
         // Business logic: update run with schema
-        return $this->flowRunBuilderService->updateWithSchema($run, $schema);
+        return $run->withSchema($schema);
     }
 
     /**
@@ -302,9 +282,6 @@ class FlowExecutor
 
         // Business logic: mark run as failed
         $run = $run->fail($e->getMessage(), $e);
-
-        // Presentation: emit run failed event
-        $this->flowEventService->emitRunFailed($sourceFile, $e->getMessage(), $e);
 
         $this->cleanupTempFile($tempFile);
 
@@ -404,8 +381,6 @@ class FlowExecutor
             'id' => $rowId,
         ];
 
-        // Presentation: emit row skipped event
-        $this->flowEventService->emitRowSkipped($executionStatistics['rowNumber'], $row->toArray(), 'Empty row skipped', []);
     }
 
     /**
@@ -472,11 +447,7 @@ class FlowExecutor
         if ($model === null) {
             // Model was skipped (duplicate with 'skip' strategy)
             $executionStatistics['skipped']++;
-            // Presentation: emit row skipped event
-            $this->flowEventService->emitRowSkipped($executionStatistics['rowNumber'], $row->toArray(), 'Duplicate record skipped', []);
         } else {
-            // Presentation: emit row imported event
-            $this->flowEventService->emitRowImported($executionStatistics['rowNumber'], $row->toArray(), $model);
             $executionStatistics['imported']++;
         }
     }
@@ -493,10 +464,8 @@ class FlowExecutor
         try {
             $this->pivotSyncService->sync($row, $modelMapping);
             $executionStatistics['imported']++;
-            $this->flowEventService->emitRowImported($executionStatistics['rowNumber'], $row->toArray(), null);
         } catch (\Exception $e) {
             $executionStatistics['errors']++;
-            $this->flowEventService->emitRowError($executionStatistics['rowNumber'], $row->toArray(), $e->getMessage(), $e);
             throw $e;
         }
     }
@@ -555,9 +524,6 @@ class FlowExecutor
         // Business logic: update statistics
         $executionStatistics['skipped']++;
 
-        // Presentation: emit row skipped event
-        $this->flowEventService->emitRowSkipped($executionStatistics['rowNumber'], $row->toArray(), 'Validation failed', $e->errors());
-
         // Business logic: add error to run with validation details
         $run = $run->addError(
             'Validation failed for row '.$executionStatistics['rowNumber'],
@@ -615,9 +581,6 @@ class FlowExecutor
 
         // Business logic: update statistics
         $executionStatistics['errors']++;
-
-        // Presentation: emit row skipped event
-        $this->flowEventService->emitRowSkipped($executionStatistics['rowNumber'], $row->toArray(), $e->getMessage(), ['exception' => $e->getMessage()]);
 
         // Business logic: add error to run
         $run = $run->addError($e->getMessage(), $executionStatistics['rowNumber'], ['exception' => $e->getMessage()]);
@@ -702,7 +665,6 @@ class FlowExecutor
      * Add warning for empty rows.
      *
      * Business logic: adds warning to run.
-     * Presentation: delegates formatting to FlowWarningFormatterService.
      *
      * @param  FlowRun  $run  The current flow run
      * @param  array<int, array{row_number: int, id: string|null}>  $emptyRows  The empty rows
@@ -710,18 +672,23 @@ class FlowExecutor
      */
     private function addEmptyRowsWarning(FlowRun $run, array $emptyRows): FlowRun
     {
-        // Presentation: format warning message
-        $warning = $this->warningFormatter->buildEmptyRowsWarning($emptyRows);
+        $emptyRowsCount = count($emptyRows);
+        $emptyRowsList = $this->formatRowsList($emptyRows, 10);
+        $message = "{$emptyRowsCount} empty row(s) were skipped during import";
+        if (! empty($emptyRowsList)) {
+            $message .= ": {$emptyRowsList}";
+        }
 
-        // Business logic: add warning to run
-        return $run->addWarning($warning['message'], $warning['metadata']);
+        return $run->addWarning($message, [
+            'empty_rows_count' => $emptyRowsCount,
+            'empty_rows' => $emptyRows,
+        ]);
     }
 
     /**
      * Add warning for truncated fields.
      *
      * Business logic: adds warning to run.
-     * Presentation: delegates formatting to FlowWarningFormatterService.
      *
      * @param  FlowRun  $run  The current flow run
      * @param  array<int, array{row_number: int, id: string|null, field: string, original_length: int, max_length: int}>  $truncatedFieldsDetails  The truncated fields details
@@ -729,11 +696,17 @@ class FlowExecutor
      */
     private function addTruncatedFieldsWarning(FlowRun $run, array $truncatedFieldsDetails): FlowRun
     {
-        // Presentation: format warning message
-        $warning = $this->warningFormatter->buildTruncatedFieldsWarning($truncatedFieldsDetails);
+        $truncatedCount = count($truncatedFieldsDetails);
+        $truncatedList = $this->formatTruncatedFieldsList($truncatedFieldsDetails, 10);
+        $message = "{$truncatedCount} field(s) were truncated because they exceeded column maximum length";
+        if (! empty($truncatedList)) {
+            $message .= ": {$truncatedList}";
+        }
 
-        // Business logic: add warning to run
-        return $run->addWarning($warning['message'], $warning['metadata']);
+        return $run->addWarning($message, [
+            'truncated_fields_count' => $truncatedCount,
+            'truncated_fields' => $truncatedFieldsDetails,
+        ]);
     }
 
     /**
@@ -763,5 +736,63 @@ class FlowExecutor
         if ($this->progressCallback !== null) {
             call_user_func($this->progressCallback, $run);
         }
+    }
+
+    /**
+     * Format list of rows for display (e.g., "Row 1 (ID: 123), Row 5 (ID: 456)").
+     */
+    private function formatRowsList(array $rows, int $maxItems = 10): string
+    {
+        $items = [];
+        $displayRows = array_slice($rows, 0, $maxItems);
+
+        foreach ($displayRows as $row) {
+            $rowNum = $row['row_number'];
+            $id = $row['id'] ?? null;
+
+            if ($id !== null) {
+                $items[] = "Row {$rowNum} (ID: {$id})";
+            } else {
+                $items[] = "Row {$rowNum}";
+            }
+        }
+
+        $result = implode(', ', $items);
+
+        if (count($rows) > $maxItems) {
+            $remaining = count($rows) - $maxItems;
+            $result .= " and {$remaining} more";
+        }
+
+        return $result;
+    }
+
+    /**
+     * Format list of truncated fields for display.
+     */
+    private function formatTruncatedFieldsList(array $truncatedFields, int $maxItems = 10): string
+    {
+        $items = [];
+        $displayFields = array_slice($truncatedFields, 0, $maxItems);
+
+        foreach ($displayFields as $field) {
+            $rowNum = $field['row_number'];
+            $fieldName = $field['field'];
+            $id = $field['id'] ?? null;
+            $originalLength = $field['original_length'];
+            $maxLength = $field['max_length'];
+
+            $rowInfo = $id !== null ? "Row {$rowNum} (ID: {$id})" : "Row {$rowNum}";
+            $items[] = "{$rowInfo}, field '{$fieldName}' ({$originalLength} → {$maxLength} chars)";
+        }
+
+        $result = implode('; ', $items);
+
+        if (count($truncatedFields) > $maxItems) {
+            $remaining = count($truncatedFields) - $maxItems;
+            $result .= " and {$remaining} more";
+        }
+
+        return $result;
     }
 }

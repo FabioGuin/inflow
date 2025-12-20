@@ -3,8 +3,8 @@
 namespace InFlow\Commands\Traits\Core;
 
 use InFlow\Constants\DisplayConstants;
-use InFlow\ValueObjects\FlowRun;
-use InFlow\ValueObjects\ProcessingContext;
+use InFlow\ValueObjects\Flow\FlowRun;
+use InFlow\ValueObjects\Flow\ProcessingContext;
 
 trait HandlesProcessingLifecycle
 {
@@ -109,22 +109,34 @@ trait HandlesProcessingLifecycle
         $this->line('<fg=cyan>Processing Summary</>');
         $this->line(DisplayConstants::SECTION_SEPARATOR);
 
-        // Business logic: format summary using FlowRunResultsFormatterService
-        $this->line($this->services->flowRunResultsFormatter->formatStatusLineWithIcon($run));
-        $this->line($this->services->flowRunResultsFormatter->formatSummaryStatisticsLine($run));
-        $this->line($this->services->flowRunResultsFormatter->formatSummaryDurationLine($duration));
-        $this->line($this->services->flowRunResultsFormatter->formatSummarySuccessRateLine($run));
+        // Simplified formatting without formatter service
+        $statusIcon = match ($run->status->value) {
+            'completed' => '<fg=green>✓</>',
+            'partially_completed' => '<fg=yellow>⚠</>',
+            'failed' => '<fg=red>✗</>',
+            default => '○',
+        };
 
-        $errorsLine = $this->services->flowRunResultsFormatter->formatSummaryErrorsLine($run);
-        if ($errorsLine !== null) {
-            $this->line($errorsLine);
+        $this->line("{$statusIcon} Status: <fg=white>{$run->status->value}</>");
+        $this->line("  Imported: <fg=yellow>".number_format($run->importedRows)."</>");
+        $this->line("  Skipped: <fg=yellow>".number_format($run->skippedRows)."</>");
+        $this->line("  Errors: <fg=yellow>".number_format($run->errorCount)."</>");
+        $this->line("  Duration: <fg=yellow>".round($duration, 2)."s</>");
+
+        if ($run->totalRows > 0) {
+            $successRate = round(($run->importedRows / $run->totalRows) * 100, 1);
+            $this->line("  Success rate: <fg=yellow>{$successRate}%</>");
+        }
+
+        if ($run->errorCount > 0) {
+            $this->line("  <fg=red>Errors encountered: {$run->errorCount}</>");
         }
 
         $this->newLine();
-        $completionLine = match ($run->status) {
-            \InFlow\Enums\FlowRunStatus::Completed => '<fg=green>Processing completed successfully.</>',
-            \InFlow\Enums\FlowRunStatus::PartiallyCompleted => '<fg=yellow>Processing completed with errors.</>',
-            \InFlow\Enums\FlowRunStatus::Failed => '<fg=red>Processing failed.</>',
+        $completionLine = match ($run->status->value) {
+            'completed' => '<fg=green>Processing completed successfully.</>',
+            'partially_completed' => '<fg=yellow>Processing completed with errors.</>',
+            'failed' => '<fg=red>Processing failed.</>',
             default => '<fg=cyan>Processing finished.</>',
         };
 

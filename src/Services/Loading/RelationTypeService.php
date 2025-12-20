@@ -3,7 +3,7 @@
 namespace InFlow\Services\Loading;
 
 use Illuminate\Database\Eloquent\Model;
-use InFlow\Enums\EloquentRelationType;
+use InFlow\Enums\Data\EloquentRelationType;
 
 /**
  * Service for determining Eloquent relation types.

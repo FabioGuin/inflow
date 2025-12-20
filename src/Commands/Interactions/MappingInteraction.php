@@ -4,12 +4,14 @@ namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
 use InFlow\Constants\DisplayConstants;
-use InFlow\Enums\CustomMappingAction;
-use InFlow\Enums\EloquentRelationType;
-use InFlow\Enums\InteractiveCommand;
-use InFlow\Enums\MappingHistoryAction;
-use InFlow\Services\Core\InFlowConsoleServices;
-use InFlow\ValueObjects\MappingDefinition;
+use InFlow\Enums\Data\CustomMappingAction;
+use InFlow\Enums\Data\EloquentRelationType;
+use InFlow\Enums\UI\InteractiveCommand;
+use InFlow\Enums\Data\MappingHistoryAction;
+use InFlow\Services\File\ModelSelectionService;
+use InFlow\Services\Loading\RelationTypeService;
+use InFlow\Services\Mapping\MappingHistoryService;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\select;
@@ -30,24 +32,26 @@ class MappingInteraction
 
     public function __construct(
         private readonly InFlowCommand $command,
-        private readonly InFlowConsoleServices $services
+        private readonly ModelSelectionService $modelSelectionService,
+        private readonly MappingHistoryService $mappingHistoryService,
+        private readonly RelationTypeService $relationTypeService
     ) {}
 
     private function duplicateHandling(): DuplicateHandlingInteraction
     {
-        return $this->duplicateHandling ??= new DuplicateHandlingInteraction($this->command, $this->services);
+        return $this->duplicateHandling ??= new DuplicateHandlingInteraction($this->command, $this->modelSelectionService);
     }
 
     private function relationMapping(): RelationMappingInteraction
     {
-        return $this->relationMapping ??= new RelationMappingInteraction($this->command, $this->services);
+        return $this->relationMapping ??= new RelationMappingInteraction($this->command, $this->modelSelectionService, $this->relationTypeService);
     }
 
     public function getModelClass(): ?string
     {
         $modelClass = $this->command->argument('to');
         if ($modelClass !== null) {
-            return $this->services->modelSelectionService->normalizeModelClass($modelClass);
+            return $this->modelSelectionService->normalizeModelClass($modelClass);
         }
 
         if ($this->command->option('no-interaction')) {
@@ -66,7 +70,7 @@ class MappingInteraction
 
     public function configureDuplicateHandling(MappingDefinition $mapping, string $modelClass): MappingDefinition
     {
-        if ($this->services->mappingProcessingService->isDuplicateHandlingConfigured($mapping)) {
+        if ($this->isDuplicateHandlingConfigured($mapping)) {
             return $mapping;
         }
 
@@ -89,13 +93,13 @@ class MappingInteraction
 
         if ($this->command->isQuiet() || $this->command->option('no-interaction')) {
             $finalPath = $suggestedPath;
-            
+
             // For array relations, append .* to map entire array
             if ($isArrayRelation) {
                 $finalPath = $suggestedPath.'.*';
             }
-            
-            $this->services->mappingHistoryService->addEntry(
+
+            $this->mappingHistoryService->addEntry(
                 $mappingHistory,
                 $currentIndex,
                 $sourceColumn,
@@ -106,7 +110,7 @@ class MappingInteraction
             return $finalPath;
         }
 
-        $hasPrevious = $this->services->mappingHistoryService->hasPrevious($currentIndex);
+        $hasPrevious = $this->mappingHistoryService->hasPrevious($currentIndex);
 
         if ($hasPrevious) {
             $this->command->line('  <fg=gray>Press Ctrl+C to cancel, or continue...</>');
@@ -165,7 +169,7 @@ class MappingInteraction
         $modelClass = $this->command->textWithValidation(
             label: 'Enter target model class (FQCN, e.g., App\\Models\\User)',
             required: true,
-            validate: fn ($value) => $this->services->modelSelectionService->validateModelClass($value)
+            validate: fn ($value) => $this->modelSelectionService->validateModelClass($value)
         );
 
         if ($modelClass === null) {
@@ -183,10 +187,7 @@ class MappingInteraction
         int &$currentIndex,
         mixed $columnMeta = null
     ): string|bool|array {
-        // Check for back navigation
-        if ($hasPrevious && $this->shouldNavigateBack()) {
-            return $this->handleHistoryNavigation($mappingHistory, $currentIndex, $modelClass);
-        }
+        // Back navigation is handled via menu options
 
         $targetPath = $this->askForCustomMapping($sourceColumn, $modelClass, $hasPrevious, $columnMeta);
 
@@ -201,7 +202,7 @@ class MappingInteraction
 
         // Handle skip
         if ($targetPath === false) {
-            $this->services->mappingHistoryService->addEntry(
+            $this->mappingHistoryService->addEntry(
                 $mappingHistory,
                 $currentIndex,
                 $sourceColumn,
@@ -234,11 +235,6 @@ class MappingInteraction
         return $targetPath;
     }
 
-    private function shouldNavigateBack(): bool
-    {
-        return false; // Back navigation is handled via menu options
-    }
-
     /**
      * Ask for delimiter if this is a BelongsToMany relation with potential multi-values.
      */
@@ -254,7 +250,7 @@ class MappingInteraction
         }
 
         $relationName = $pathParts[0];
-        $relationType = $this->services->relationTypeService->getRelationType($modelClass, $relationName);
+        $relationType = $this->relationTypeService->getRelationType($modelClass, $relationName);
 
         // Only ask for BelongsToMany relations
         if ($relationType !== EloquentRelationType::BelongsToMany) {
@@ -313,7 +309,7 @@ class MappingInteraction
             $currentIndex = $action;
             $entry = $mappingHistory[$action];
             $sourceColumn = $entry['source'];
-            $hasPrevious = $this->services->mappingHistoryService->hasPrevious($currentIndex);
+            $hasPrevious = $this->mappingHistoryService->hasPrevious($currentIndex);
 
             return $this->handleCustomMapping($sourceColumn, $modelClass, $hasPrevious, $mappingHistory, $currentIndex);
         }
@@ -400,8 +396,8 @@ class MappingInteraction
         $this->command->newLine();
         $this->command->line('  <fg=cyan>Mapping column:</> <fg=yellow>'.$sourceColumn.'</>');
 
-        $relations = $this->services->modelSelectionService->getModelRelations($modelClass);
-        $fillableAttributes = $this->services->modelSelectionService->getAllModelAttributes($modelClass);
+        $relations = $this->modelSelectionService->getModelRelations($modelClass);
+        $fillableAttributes = $this->modelSelectionService->getAllModelAttributes($modelClass);
 
         $options = CustomMappingAction::options(count($relations), count($fillableAttributes), $hasPrevious);
 
@@ -474,5 +470,21 @@ class MappingInteraction
         }
 
         return $selectedField;
+    }
+
+    /**
+     * Check if mapping has duplicate handling configured.
+     */
+    private function isDuplicateHandlingConfigured(MappingDefinition $mapping): bool
+    {
+        $firstMapping = $mapping->mappings[0] ?? null;
+        if ($firstMapping === null) {
+            return false;
+        }
+
+        $options = $firstMapping->options ?? [];
+
+        return ! empty($options['unique_key'])
+            && ! empty($options['duplicate_strategy']);
     }
 }

@@ -10,9 +10,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use InFlow\Mappings\MappingBuilder;
 use InFlow\Services\File\ModelSelectionService;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\ValueObjects\Data\SourceSchema;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Service for validating mappings before execution.

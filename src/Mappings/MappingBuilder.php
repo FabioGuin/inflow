@@ -4,13 +4,13 @@ namespace InFlow\Mappings;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use InFlow\Enums\ColumnType;
+use InFlow\Enums\Data\ColumnType;
 use InFlow\Services\Mapping\ModelCastService;
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ColumnMetadata;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\SourceSchema;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Builder for creating mapping definitions with auto-mapping support

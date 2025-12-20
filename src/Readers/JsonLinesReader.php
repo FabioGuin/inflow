@@ -4,7 +4,7 @@ namespace InFlow\Readers;
 
 use InFlow\Contracts\ReaderInterface;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 /**
  * JSON reader with support for both JSON Lines (NDJSON) and JSON arrays.

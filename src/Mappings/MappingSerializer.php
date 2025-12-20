@@ -2,7 +2,7 @@
 
 namespace InFlow\Mappings;
 
-use InFlow\ValueObjects\MappingDefinition;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
 
 /**
  * Serializer for mapping definitions to/from JSON

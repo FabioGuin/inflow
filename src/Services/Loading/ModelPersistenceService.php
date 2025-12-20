@@ -4,7 +4,7 @@ namespace InFlow\Services\Loading;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
-use InFlow\Enums\DuplicateStrategy;
+use InFlow\Enums\Data\DuplicateStrategy;
 
 /**
  * Service for persisting models with duplicate handling strategies.

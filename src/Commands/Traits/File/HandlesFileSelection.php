@@ -37,7 +37,7 @@ trait HandlesFileSelection
         }
 
         // Business logic: discover available files
-        $availableFiles = $this->services->fileSelectionService->findAvailableFiles();
+        $availableFiles = $this->fileSelectionService->findAvailableFiles();
 
         // Presentation: prompt user for file selection
         if (! empty($availableFiles)) {
@@ -77,7 +77,7 @@ trait HandlesFileSelection
         $filePath = $this->textWithValidation(
             label: 'Enter file path',
             required: true,
-            validate: fn ($value) => $this->services->fileSelectionService->isValidFile($value)
+            validate: fn ($value) => $this->fileSelectionService->isValidFile($value)
                 ? null
                 : 'File does not exist or is not readable.'
         );

@@ -3,7 +3,8 @@
 namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
-use InFlow\Services\Core\InFlowConsoleServices;
+use InFlow\Services\Mapping\TransformSelectionService;
+use InFlow\Services\Mapping\TransformFormatterService;
 use InFlow\Services\Mapping\ModelCastService;
 
 use function Laravel\Prompts\multiselect;
@@ -12,7 +13,8 @@ readonly class TransformInteraction
 {
     public function __construct(
         private InFlowCommand $command,
-        private InFlowConsoleServices $services,
+        private TransformSelectionService $transformSelectionService,
+        private TransformFormatterService $transformFormatterService,
         private ModelCastService $modelCastService
     ) {}
 
@@ -60,10 +62,10 @@ readonly class TransformInteraction
         // Available transforms are filtered based on model cast type (if defined)
         // Also use DB type when available to filter transforms (e.g., cast=decimal but DB=int)
         $dbType = $castInfo['dbType'] ?? null;
-        $transformTypes = $this->services->transformSelectionService->getAvailableTransformTypes($columnMeta, $targetType, $dbType);
-        $castType = $this->services->transformSelectionService->getCastTypeForTarget($targetType);
+        $transformTypes = $this->transformSelectionService->getAvailableTransformTypes($columnMeta, $targetType, $dbType);
+        $castType = $this->transformSelectionService->getCastTypeForTarget($targetType);
 
-        $availableTransforms = $this->services->transformFormatterService->formatForDisplay($transformTypes, $castType);
+        $availableTransforms = $this->transformFormatterService->formatForDisplay($transformTypes, $castType);
 
         // Show informational message about available transforms
         if ($hasCast && empty($availableTransforms)) {
@@ -88,8 +90,8 @@ readonly class TransformInteraction
             return $suggestedTransforms;
         }
 
-        $options = $this->services->transformSelectionService->buildOptionsWithSuggestions($availableTransforms, $suggestedTransforms);
-        $default = $this->services->transformSelectionService->getDefaultTransforms($options, $suggestedTransforms);
+        $options = $this->transformSelectionService->buildOptionsWithSuggestions($availableTransforms, $suggestedTransforms);
+        $default = $this->transformSelectionService->getDefaultTransforms($options, $suggestedTransforms);
 
         $selected = multiselect(
             label: "  Select transforms for {$sourceColumn}",
@@ -98,7 +100,7 @@ readonly class TransformInteraction
             scroll: 10
         );
 
-        return $this->services->transformSelectionService->processSelectedTransforms(
+        return $this->transformSelectionService->processSelectedTransforms(
             $selected,
             fn (string $label, ?string $hint, array $examples, ?string $default) => $this->askForInput($label, $hint, $examples, $default)
         );

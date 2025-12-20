@@ -2,7 +2,7 @@
 
 namespace InFlow\Services\Mapping;
 
-use InFlow\Enums\TransformType;
+use InFlow\Enums\Data\TransformType;
 
 /**
  * Service for formatting transform information for display.

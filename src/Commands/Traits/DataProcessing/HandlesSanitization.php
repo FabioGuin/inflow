@@ -19,7 +19,7 @@ trait HandlesSanitization
      */
     public function getSanitizerConfig(): array
     {
-        return $this->services->configResolver->buildSanitizerConfig(
+        return $this->configResolver->buildSanitizerConfig(
             fn (string $key) => $this->getOption($key)
         );
     }

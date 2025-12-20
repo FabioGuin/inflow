@@ -2,9 +2,9 @@
 
 namespace InFlow\Detectors;
 
-use InFlow\Enums\FileType;
+use InFlow\Enums\File\FileType;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 /**
  * Detects file format and parameters (delimiter, quote char, header, encoding)

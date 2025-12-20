@@ -2,7 +2,7 @@
 
 namespace InFlow\Services\Loading\Strategies;
 
-use InFlow\Enums\EloquentRelationType;
+use InFlow\Enums\Data\EloquentRelationType;
 use InFlow\Services\Loading\ModelPersistenceService;
 use InFlow\Transforms\TransformEngine;
 

@@ -2,7 +2,7 @@
 
 namespace InFlow\Services\Formatter;
 
-use InFlow\Enums\TableHeader;
+use InFlow\Enums\Data\TableHeader;
 use InFlow\Services\File\FileWriterService;
 
 /**

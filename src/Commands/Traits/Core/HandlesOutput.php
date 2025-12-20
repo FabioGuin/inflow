@@ -259,7 +259,7 @@ trait HandlesOutput
         $normalized = strtolower(trim($value));
 
         // Check for back command
-        if (\InFlow\Enums\InteractiveCommand::isBack($normalized)) {
+        if (\InFlow\Enums\UI\InteractiveCommand::isBack($normalized)) {
             return null;
         }
 

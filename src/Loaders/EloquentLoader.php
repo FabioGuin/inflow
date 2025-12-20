@@ -3,51 +3,23 @@
 namespace InFlow\Loaders;
 
 use Illuminate\Database\Eloquent\Model;
-use InFlow\Services\Loading\AttributeGroupingService;
-use InFlow\Services\Loading\ModelPersistenceService;
-use InFlow\Services\Loading\RelationResolutionService;
-use InFlow\Services\Loading\RelationSyncService;
-use InFlow\ValueObjects\ModelMapping;
-use InFlow\ValueObjects\Row;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
+use InFlow\Enums\Data\DuplicateStrategy;
+use InFlow\Enums\Data\EloquentRelationType;
+use InFlow\Exceptions\RelationResolutionException;
+use InFlow\Services\Loading\RelationTypeService;
+use InFlow\Services\Loading\Strategies\RelationSyncStrategyFactory;
+use InFlow\Transforms\TransformEngine;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Data\Row;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
- * Loader for applying mappings to Eloquent models with nested relation support
+ * Simplified Eloquent loader that consolidates all loading services.
  *
  * This class implements a "relation-driven" approach to ETL mapping, where relations
  * are specified using dot notation (e.g., "category.name") instead of foreign keys.
- *
- * **Why Relation-Driven?**
- * - Aligned with real ETL scenarios (files contain names/attributes, not IDs)
- * - Leverages existing Eloquent relations (DRY principle)
- * - Intuitive syntax for business users
- * - Automatic lookup and "create if missing" support
- * - Scalable to nested relations (e.g., "address.city.country.name")
- *
- * **Performance Considerations:**
- * - Extra queries for lookups (acceptable for batch ETL)
- * - Future: batch lookup optimization (group by value)
- * - Future: caching for frequent lookups
- *
- * **Alternative Approaches Considered:**
- * - ID-Driven: Simple but requires pre-processing (not suitable for ETL)
- * - Attribute-Driven: More explicit but less intuitive
- * - Hybrid: Best of both worlds (future enhancement)
- *
- * @todo [RELATIONS] Comprehensive relation support roadmap:
- *   ✅ BelongsTo with lookup (find by attribute, create if missing)
- *   ✅ HasOne with lookup support
- *   ✅ HasMany with lookup, update/create logic, batch operations
- *   ✅ BelongsToMany with pivot data, attach/detach/sync
- *   ⏳ MorphTo/MorphOne/MorphMany (polymorphic relations)
- *   ⏳ Hybrid support (ID direct when available, relation-driven otherwise)
- *   ⏳ Batch lookup optimization (group queries by value)
- *   ⏳ Lookup caching for performance
- *
- * Relations are a critical part of ETL workflows and need careful implementation
- * to handle various scenarios: lookup by attributes, create-if-missing, update-existing,
- * batch operations, and pivot table data.
- *
- * @see docs/relation-driven-analysis.md for detailed analysis
  */
 class EloquentLoader
 {
@@ -58,11 +30,17 @@ class EloquentLoader
      */
     private array $truncatedFields = [];
 
+    /**
+     * Cache for column max lengths per model
+     *
+     * @var array<string, array<string, int|null>>
+     */
+    private static array $columnMaxLengthsCache = [];
+
     public function __construct(
-        private readonly AttributeGroupingService $attributeGroupingService,
-        private readonly ModelPersistenceService $modelPersistenceService,
-        private readonly RelationResolutionService $relationResolutionService,
-        private readonly RelationSyncService $relationSyncService
+        private readonly TransformEngine $transformEngine,
+        private readonly RelationTypeService $relationTypeService,
+        private readonly RelationSyncStrategyFactory $strategyFactory
     ) {}
 
     /**
@@ -86,41 +64,38 @@ class EloquentLoader
     /**
      * Load a row into a model using the mapping definition
      *
-     * Business logic: orchestrates the loading process using dedicated services.
-     * Presentation logic (logging, errors) is handled by services.
-     *
      * @return Model|null The loaded model, or null if the model was skipped (e.g., duplicate with 'skip' strategy)
      */
     public function load(Row $row, ModelMapping $mapping): ?Model
     {
-        // Business logic: group attributes and relations
-        $grouped = $this->attributeGroupingService->groupAttributesAndRelations($row, $mapping);
+        // Group attributes and relations
+        $grouped = $this->groupAttributesAndRelations($row, $mapping);
         $attributes = $grouped['attributes'];
         $relations = $grouped['relations'];
         $this->truncatedFields = $grouped['truncatedFields'];
 
-        // Business logic: separate BelongsTo relations from others
+        // Separate BelongsTo relations from others
         // BelongsTo relations need to be resolved FIRST to get foreign keys before creating/updating the model
-        $separated = $this->relationResolutionService->separateRelations($relations, $mapping->modelClass);
+        $separated = $this->separateRelations($relations, $mapping->modelClass);
         $belongsToRelations = $separated['belongsTo'];
         $otherRelations = $separated['other'];
 
-        // Business logic: add foreign keys from BelongsTo relations to attributes
+        // Add foreign keys from BelongsTo relations to attributes
         foreach ($belongsToRelations as $relationInfo) {
             if (isset($relationInfo['foreign_key'])) {
                 $attributes[$relationInfo['foreign_key']['key']] = $relationInfo['foreign_key']['value'];
             }
         }
 
-        // Business logic: create/update main model (now with foreign keys from BelongsTo relations)
-        $model = $this->modelPersistenceService->createOrUpdate($mapping->modelClass, $attributes, $mapping->options);
+        // Create/update main model (now with foreign keys from BelongsTo relations)
+        $model = $this->createOrUpdate($mapping->modelClass, $attributes, $mapping->options);
 
         // If model is null (skipped duplicate), return null
         if ($model === null) {
             return null;
         }
 
-        // Business logic: sync other relations (HasOne, HasMany, BelongsToMany, etc.)
+        // Sync other relations (HasOne, HasMany, BelongsToMany, etc.)
         foreach ($otherRelations as $relationName => $relationInfo) {
             if (! empty($relationInfo['pivot'])) {
                 $relationInfo['data']['__pivot'] = $relationInfo['pivot'];
@@ -131,7 +106,7 @@ class EloquentLoader
                 $relationInfo['data']['__field_transforms'] = $relationInfo['field_transforms'];
             }
 
-            $this->relationSyncService->syncRelation(
+            $this->syncRelation(
                 $model,
                 $relationName,
                 $relationInfo['data'],
@@ -140,9 +115,750 @@ class EloquentLoader
             );
         }
 
-        // Business logic: set BelongsTo relations on model for immediate access
-        $this->relationResolutionService->setBelongsToRelations($model, $belongsToRelations);
+        // Set BelongsTo relations on model for immediate access
+        $this->setBelongsToRelations($model, $belongsToRelations);
 
         return $model;
+    }
+
+    // ========== Attribute Grouping (consolidated from AttributeGroupingService) ==========
+
+    /**
+     * Group column mappings into attributes and relations.
+     */
+    private function groupAttributesAndRelations(Row $row, ModelMapping $mapping): array
+    {
+        $attributes = [];
+        $relations = [];
+        $truncatedFields = [];
+
+        foreach ($mapping->columns as $columnMapping) {
+            // Extract and transform value
+            $transformedValue = $this->extractValue($row, $columnMapping);
+
+            // Parse path (e.g., "address.street" -> ["address", "street"])
+            $pathParts = explode('.', $columnMapping->targetPath);
+
+            // Validate and truncate string values that exceed column max length
+            if (count($pathParts) === 1 && is_string($transformedValue) && $transformedValue !== '') {
+                $validationResult = $this->validateAndTruncate(
+                    $mapping->modelClass,
+                    $pathParts[0],
+                    $transformedValue
+                );
+
+                $transformedValue = $validationResult['value'];
+                if ($validationResult['truncated'] && $validationResult['details'] !== null) {
+                    $truncatedFields[] = $validationResult['details'];
+                }
+            }
+
+            if (count($pathParts) === 1) {
+                // Direct attribute
+                $attributes[$pathParts[0]] = $transformedValue;
+            } else {
+                // Nested relation
+                $this->addToRelation($relations, $pathParts, $transformedValue, $columnMapping, $mapping);
+            }
+        }
+
+        return [
+            'attributes' => $attributes,
+            'relations' => $relations,
+            'truncatedFields' => $truncatedFields,
+        ];
+    }
+
+    /**
+     * Extract and transform value for a column mapping.
+     */
+    private function extractValue(Row $row, ColumnMapping $columnMapping): mixed
+    {
+        // Handle virtual source columns (for default values, generated values, etc.)
+        if ($this->isVirtualColumn($columnMapping->sourceColumn)) {
+            return $columnMapping->default;
+        }
+
+        $value = $row->get($columnMapping->sourceColumn);
+
+        // Apply default if value is empty
+        if ($value === null || $value === '') {
+            $value = $columnMapping->default;
+        }
+
+        // Apply transformations
+        return $this->transformEngine->apply(
+            $value,
+            $columnMapping->transforms,
+            ['row' => $row->toArray()]
+        );
+    }
+
+    private function isVirtualColumn(string $sourceColumn): bool
+    {
+        return str_starts_with($sourceColumn, '__default_')
+            || str_starts_with($sourceColumn, '__skip_')
+            || str_starts_with($sourceColumn, '__random_');
+    }
+
+    /**
+     * Validate and truncate string value if it exceeds column max length.
+     */
+    private function validateAndTruncate(string $modelClass, string $attributeName, string $value): array
+    {
+        if ($value === '') {
+            return ['value' => $value, 'truncated' => false, 'details' => null];
+        }
+
+        $maxLength = $this->getColumnMaxLength($modelClass, $attributeName);
+
+        if ($maxLength === null || mb_strlen($value) <= $maxLength) {
+            return ['value' => $value, 'truncated' => false, 'details' => null];
+        }
+
+        // Truncate value that exceeds max length
+        $originalLength = mb_strlen($value);
+        $truncatedValue = mb_substr($value, 0, $maxLength);
+
+        return [
+            'value' => $truncatedValue,
+            'truncated' => true,
+            'details' => [
+                'field' => $attributeName,
+                'original_length' => $originalLength,
+                'max_length' => $maxLength,
+            ],
+        ];
+    }
+
+    /**
+     * Get maximum length for a database column.
+     */
+    private function getColumnMaxLength(string $modelClass, string $columnName): ?int
+    {
+        $cacheKey = "{$modelClass}::{$columnName}";
+
+        if (isset(self::$columnMaxLengthsCache[$cacheKey])) {
+            return self::$columnMaxLengthsCache[$cacheKey];
+        }
+
+        try {
+            $model = new $modelClass;
+            $table = $model->getTable();
+
+            $columns = DB::select("SHOW COLUMNS FROM `{$table}` WHERE Field = ?", [$columnName]);
+
+            if (empty($columns)) {
+                self::$columnMaxLengthsCache[$cacheKey] = null;
+
+                return null;
+            }
+
+            $column = $columns[0];
+            $type = $column->Type;
+
+            // Extract length from VARCHAR(255), CHAR(10), etc.
+            if (preg_match('/^(varchar|char|varbinary|binary)\((\d+)\)/i', $type, $matches)) {
+                $maxLength = (int) $matches[2];
+                self::$columnMaxLengthsCache[$cacheKey] = $maxLength;
+
+                return $maxLength;
+            }
+
+            // TEXT types
+            if (stripos($type, 'tinytext') !== false) {
+                self::$columnMaxLengthsCache[$cacheKey] = 255;
+
+                return 255;
+            }
+            if (stripos($type, 'text') !== false && stripos($type, 'tiny') === false) {
+                // TEXT, MEDIUMTEXT, LONGTEXT - no practical limit
+                self::$columnMaxLengthsCache[$cacheKey] = null;
+
+                return null;
+            }
+
+            // No length limit found
+            self::$columnMaxLengthsCache[$cacheKey] = null;
+
+            return null;
+        } catch (\Exception $e) {
+            \inflow_report($e, 'debug', [
+                'operation' => 'getColumnMaxLength',
+                'model' => $modelClass,
+                'column' => $columnName,
+            ]);
+            self::$columnMaxLengthsCache[$cacheKey] = null;
+
+            return null;
+        }
+    }
+
+    /**
+     * Add value to relation data structure.
+     */
+    private function addToRelation(
+        array &$relations,
+        array $pathParts,
+        mixed $transformedValue,
+        ColumnMapping $columnMapping,
+        ModelMapping $mapping
+    ): void {
+        $relationName = $pathParts[0];
+        $this->ensureRelationExists($relations, $relationName);
+
+        // Route to appropriate handler
+        if ($pathParts[1] === '*') {
+            $this->handleFullArrayMapping($relations, $relationName, $transformedValue, $columnMapping, $mapping);
+
+            return;
+        }
+
+        if ($pathParts[1] === 'pivot' && isset($pathParts[2])) {
+            $this->handlePivotMapping($relations, $relationName, $pathParts[2], $transformedValue);
+
+            return;
+        }
+
+        $this->handleNormalRelationField($relations, $relationName, $pathParts[1], $transformedValue, $columnMapping, $mapping);
+    }
+
+    private function ensureRelationExists(array &$relations, string $relationName): void
+    {
+        if (! isset($relations[$relationName])) {
+            $relations[$relationName] = [
+                'data' => [],
+                'lookup' => null,
+                'pivot' => [],
+                'field_transforms' => [],
+            ];
+        }
+    }
+
+    private function handleFullArrayMapping(
+        array &$relations,
+        string $relationName,
+        mixed $transformedValue,
+        ColumnMapping $columnMapping,
+        ModelMapping $mapping
+    ): void {
+        if (! $this->isArrayRelation($mapping->modelClass, $relationName) || ! is_array($transformedValue)) {
+            return;
+        }
+
+        $relations[$relationName]['data']['__array_data'] = $transformedValue;
+        $relations[$relationName]['data']['__full_array'] = true;
+
+        // Configure lookup if present in column mapping
+        if ($columnMapping->relationLookup !== null) {
+            $this->configureLookup(
+                $relations[$relationName],
+                $columnMapping,
+                $relationName,
+                '*',
+                $mapping
+            );
+        }
+    }
+
+    private function handlePivotMapping(
+        array &$relations,
+        string $relationName,
+        string $pivotField,
+        mixed $transformedValue
+    ): void {
+        [$field, $isOptional] = $this->parseOptionalField($pivotField);
+
+        if ($transformedValue !== null || ! $isOptional) {
+            $relations[$relationName]['pivot'][$field] = $transformedValue;
+        }
+    }
+
+    private function handleNormalRelationField(
+        array &$relations,
+        string $relationName,
+        string $relationAttribute,
+        mixed $transformedValue,
+        ColumnMapping $columnMapping,
+        ModelMapping $mapping
+    ): void {
+        [$field, $isOptional] = $this->parseOptionalField($relationAttribute);
+
+        $this->configureLookup($relations[$relationName], $columnMapping, $relationName, $field, $mapping);
+
+        if ($transformedValue === null && $isOptional) {
+            return;
+        }
+
+        if ($this->isArrayRelation($mapping->modelClass, $relationName) && is_array($transformedValue)) {
+            $this->addArrayRelationValue($relations, $relationName, $field, $transformedValue);
+        } else {
+            $this->addNormalRelationValue($relations, $relationName, $field, $transformedValue, $columnMapping);
+        }
+    }
+
+    private function addArrayRelationValue(
+        array &$relations,
+        string $relationName,
+        string $field,
+        array $transformedValue
+    ): void {
+        if (! isset($relations[$relationName]['data']['__array_data'])) {
+            $relations[$relationName]['data']['__array_data'] = [];
+            $relations[$relationName]['data']['__fields'] = [];
+        }
+
+        if (empty($relations[$relationName]['data']['__array_data'])) {
+            $relations[$relationName]['data']['__array_data'] = $transformedValue;
+        }
+
+        if (! in_array($field, $relations[$relationName]['data']['__fields'], true)) {
+            $relations[$relationName]['data']['__fields'][] = $field;
+        }
+    }
+
+    private function addNormalRelationValue(
+        array &$relations,
+        string $relationName,
+        string $field,
+        mixed $transformedValue,
+        ColumnMapping $columnMapping
+    ): void {
+        $relations[$relationName]['data'][$field] = $transformedValue;
+
+        if (! empty($columnMapping->transforms)) {
+            $relations[$relationName]['field_transforms'][$field] = $columnMapping->transforms;
+        }
+    }
+
+    private function isArrayRelation(string $modelClass, string $relationName): bool
+    {
+        $relationType = $this->relationTypeService->getRelationType($modelClass, $relationName);
+
+        return in_array($relationType, [EloquentRelationType::HasMany, EloquentRelationType::BelongsToMany], true);
+    }
+
+    private function parseOptionalField(string $field): array
+    {
+        $isOptional = str_starts_with($field, '?');
+
+        return [$isOptional ? substr($field, 1) : $field, $isOptional];
+    }
+
+    /**
+     * Configure relation lookup.
+     */
+    private function configureLookup(
+        array &$relationInfo,
+        ColumnMapping $columnMapping,
+        string $relationName,
+        string $relationAttribute,
+        ModelMapping $mapping
+    ): void {
+        // If relationLookup is explicitly configured, use it
+        if ($columnMapping->relationLookup !== null) {
+            $relationInfo['lookup'] = [
+                'column' => $columnMapping,
+                'field' => $columnMapping->relationLookup['field'] ?? $relationAttribute,
+                'create_if_missing' => $columnMapping->relationLookup['create_if_missing'] ?? false,
+                'delimiter' => $columnMapping->relationLookup['delimiter'] ?? null,
+            ];
+
+            return;
+        }
+
+        // Auto-detect based on relation type
+        $relationType = $this->relationTypeService->getRelationType($mapping->modelClass, $relationName);
+
+        if ($relationType === EloquentRelationType::BelongsTo) {
+            $relationInfo['lookup'] = [
+                'column' => $columnMapping,
+                'field' => $relationAttribute,
+                'create_if_missing' => false,
+            ];
+
+            return;
+        }
+
+        if ($relationType === EloquentRelationType::HasMany) {
+            // Only set lookup if not already set (first unique field wins)
+            if ($relationInfo['lookup'] !== null) {
+                return;
+            }
+
+            // Check if field has unique constraint in related model
+            if ($this->isUniqueFieldInRelatedModel($mapping->modelClass, $relationName, $relationAttribute)) {
+                $relationInfo['lookup'] = [
+                    'column' => $columnMapping,
+                    'field' => $relationAttribute,
+                    'create_if_missing' => true,
+                ];
+            }
+        }
+    }
+
+    private function isUniqueFieldInRelatedModel(string $parentModelClass, string $relationName, string $fieldName): bool
+    {
+        try {
+            if (! class_exists($parentModelClass)) {
+                return false;
+            }
+
+            $parentModel = new $parentModelClass;
+
+            if (! method_exists($parentModel, $relationName)) {
+                return false;
+            }
+
+            $relation = $parentModel->$relationName();
+
+            if (! method_exists($relation, 'getRelated')) {
+                return false;
+            }
+
+            $relatedModel = $relation->getRelated();
+            $table = $relatedModel->getTable();
+            $primaryKey = $relatedModel->getKeyName();
+
+            // Check if field is primary key
+            if ($fieldName === $primaryKey) {
+                return true;
+            }
+
+            // Check for unique indexes
+            $indexes = DB::select("SHOW INDEX FROM `{$table}` WHERE Column_name = ? AND Non_unique = 0", [$fieldName]);
+
+            return ! empty($indexes);
+        } catch (\Exception $e) {
+            \inflow_report($e, 'debug', [
+                'operation' => 'isUniqueFieldInRelatedModel',
+                'parent_model' => $parentModelClass,
+                'relation' => $relationName,
+                'field' => $fieldName,
+            ]);
+
+            return false;
+        }
+    }
+
+    // ========== Model Persistence (consolidated from ModelPersistenceService) ==========
+
+    /**
+     * Create or update a model based on options.
+     */
+    private function createOrUpdate(string $modelClass, array $attributes, array $options): ?Model
+    {
+        $uniqueKey = $options['unique_key'] ?? null;
+        $duplicateStrategy = $this->parseDuplicateStrategy($options['duplicate_strategy'] ?? 'error');
+
+        if ($uniqueKey === null) {
+            return $this->createWithoutUniqueKey($modelClass, $attributes, $duplicateStrategy);
+        }
+
+        return $this->createWithUniqueKey($modelClass, $attributes, $uniqueKey, $duplicateStrategy);
+    }
+
+    private function createWithoutUniqueKey(string $modelClass, array $attributes, DuplicateStrategy $duplicateStrategy): ?Model
+    {
+        try {
+            return $modelClass::create($attributes);
+        } catch (QueryException $e) {
+            if (! $this->isDuplicateKeyError($e)) {
+                throw $e;
+            }
+
+            return $this->handleDuplicateError($e, $modelClass, $attributes, $duplicateStrategy);
+        }
+    }
+
+    private function createWithUniqueKey(string $modelClass, array $attributes, string $uniqueKey, DuplicateStrategy $duplicateStrategy): ?Model
+    {
+        $uniqueValue = $attributes[$uniqueKey] ?? null;
+
+        if ($uniqueValue === null) {
+            return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
+        }
+
+        $existing = $modelClass::where($uniqueKey, $uniqueValue)->first();
+
+        if ($existing !== null) {
+            return $this->handleExistingRecord($existing, $attributes, $duplicateStrategy, $uniqueKey, $uniqueValue);
+        }
+
+        return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
+    }
+
+    private function createNewModel(string $modelClass, array $attributes, DuplicateStrategy $duplicateStrategy): ?Model
+    {
+        try {
+            return $modelClass::create($attributes);
+        } catch (QueryException $e) {
+            if (! $this->isDuplicateKeyError($e)) {
+                throw $e;
+            }
+
+            return $this->handleDuplicateError($e, $modelClass, $attributes, $duplicateStrategy);
+        }
+    }
+
+    private function handleExistingRecord(Model $existing, array $attributes, DuplicateStrategy $duplicateStrategy, string $uniqueKey, mixed $uniqueValue): ?Model
+    {
+        return match ($duplicateStrategy) {
+            DuplicateStrategy::Skip => null,
+            DuplicateStrategy::Update => $this->updateModel($existing, $attributes),
+            DuplicateStrategy::Error => throw new \RuntimeException("Duplicate record found for {$uniqueKey}={$uniqueValue}"),
+        };
+    }
+
+    private function handleDuplicateError(QueryException $e, string $modelClass, array $attributes, DuplicateStrategy $duplicateStrategy): ?Model
+    {
+        return match ($duplicateStrategy) {
+            DuplicateStrategy::Skip => null,
+            DuplicateStrategy::Update => $this->updateFromDuplicateError($e, $modelClass, $attributes),
+            DuplicateStrategy::Error => throw $e,
+        };
+    }
+
+    private function updateFromDuplicateError(QueryException $e, string $modelClass, array $attributes): ?Model
+    {
+        // Try to find by primary key first
+        $model = new $modelClass;
+        $primaryKey = $model->getKeyName();
+
+        if (isset($attributes[$primaryKey])) {
+            $existing = $modelClass::find($attributes[$primaryKey]);
+            if ($existing !== null) {
+                $existing->update($attributes);
+
+                return $existing;
+            }
+        }
+
+        // Try to extract duplicate field from error message
+        $duplicateField = $this->extractDuplicateFieldFromError($e);
+        if ($duplicateField !== null && isset($attributes[$duplicateField])) {
+            $existing = $modelClass::where($duplicateField, $attributes[$duplicateField])->first();
+            if ($existing !== null) {
+                $existing->update($attributes);
+
+                return $existing;
+            }
+        }
+
+        // Can't update - re-throw error
+        throw $e;
+    }
+
+    private function updateModel(Model $model, array $attributes): Model
+    {
+        $model->update($attributes);
+
+        return $model;
+    }
+
+    private function parseDuplicateStrategy(string $strategy): DuplicateStrategy
+    {
+        return DuplicateStrategy::tryFrom($strategy) ?? DuplicateStrategy::Error;
+    }
+
+    private function isDuplicateKeyError(QueryException $e): bool
+    {
+        $message = $e->getMessage();
+        $code = $e->getCode();
+
+        return $code === 1062
+            || $code === 23000
+            || str_contains($message, 'Duplicate entry')
+            || str_contains($message, 'UNIQUE constraint')
+            || str_contains($message, 'duplicate key');
+    }
+
+    private function extractDuplicateFieldFromError(QueryException $e): ?string
+    {
+        $message = $e->getMessage();
+
+        if (preg_match("/for key '([^']+)'/", $message, $matches)) {
+            $keyName = $matches[1];
+            if (preg_match('/_([^_]+)_unique$/', $keyName, $fieldMatches)) {
+                return $fieldMatches[1];
+            }
+            if (preg_match('/(?:\.|_)([^_.]+)_unique$/', $keyName, $fieldMatches)) {
+                return $fieldMatches[1];
+            }
+        }
+
+        return null;
+    }
+
+    // ========== Relation Resolution (consolidated from RelationResolutionService) ==========
+
+    /**
+     * Separate relations into BelongsTo and other types.
+     */
+    private function separateRelations(array $relations, string $modelClass): array
+    {
+        $belongsToRelations = [];
+        $otherRelations = [];
+
+        foreach ($relations as $relationName => $relationInfo) {
+            $relationData = $relationInfo['data'] ?? $relationInfo;
+            $lookup = $relationInfo['lookup'] ?? null;
+            $pivot = $relationInfo['pivot'] ?? [];
+
+            // Check if this is a BelongsTo relation with lookup
+            if ($lookup !== null) {
+                $relationType = $this->relationTypeService->getRelationType($modelClass, $relationName);
+
+                if ($relationType === EloquentRelationType::BelongsTo) {
+                    // Resolve BelongsTo relation and add foreign key to attributes
+                    $foreignKey = $this->resolveBelongsToRelation(
+                        $modelClass,
+                        $relationName,
+                        $lookup,
+                        $relationData
+                    );
+
+                    if ($foreignKey !== null) {
+                        $belongsToRelations[$relationName] = [
+                            'data' => $relationData,
+                            'lookup' => $lookup,
+                            'related_id' => $foreignKey['value'],
+                            'foreign_key' => $foreignKey,
+                        ];
+                    }
+
+                    continue;
+                }
+            }
+
+            // Other relations (HasOne, HasMany, etc.) - sync after model is created
+            $otherRelations[$relationName] = [
+                'data' => $relationData,
+                'lookup' => $lookup,
+                'pivot' => $pivot,
+            ];
+        }
+
+        return [
+            'belongsTo' => $belongsToRelations,
+            'other' => $otherRelations,
+        ];
+    }
+
+    /**
+     * Resolve BelongsTo relation and return foreign key value.
+     */
+    private function resolveBelongsToRelation(
+        string $modelClass,
+        string $relationName,
+        array $lookup,
+        array $relationData
+    ): ?array {
+        $lookupField = $lookup['field'];
+        $createIfMissing = $lookup['create_if_missing'] ?? false;
+
+        // Get the lookup value from relationData (e.g., category name)
+        $lookupValue = $relationData[$lookupField] ?? null;
+
+        if ($lookupValue === null || $lookupValue === '') {
+            return null; // No value to lookup
+        }
+
+        // Get the related model class and relation instance
+        try {
+            $tempModel = new $modelClass;
+            if (! method_exists($tempModel, $relationName)) {
+                return null;
+            }
+
+            $relation = $tempModel->$relationName();
+            $relatedModelClass = get_class($relation->getRelated());
+
+            // Find the related model by the lookup field
+            $relatedModel = $relatedModelClass::where($lookupField, $lookupValue)->first();
+
+            if ($relatedModel === null) {
+                if ($createIfMissing) {
+                    // Create the related model if it doesn't exist
+                    $createData = [$lookupField => $lookupValue];
+                    $createData = array_merge($createData, array_diff_key($relationData, [$lookupField => true]));
+                    $relatedModel = $relatedModelClass::firstOrCreate(
+                        [$lookupField => $lookupValue],
+                        $createData
+                    );
+                } else {
+                    // Related model not found and we shouldn't create it
+                    return null;
+                }
+            }
+
+            // Get the foreign key name and value
+            $foreignKey = $relation->getForeignKeyName();
+            $foreignKeyValue = $relatedModel->getKey();
+
+            return [
+                'key' => $foreignKey,
+                'value' => $foreignKeyValue,
+            ];
+        } catch (\Exception $e) {
+            throw RelationResolutionException::fromDatabaseError(
+                $e,
+                $modelClass,
+                $relationName,
+                $lookupField,
+                $lookupValue ?? 'null',
+                $createIfMissing
+            );
+        }
+    }
+
+    /**
+     * Set BelongsTo relations on model for immediate access.
+     */
+    private function setBelongsToRelations(Model $model, array $belongsToRelations): void
+    {
+        foreach ($belongsToRelations as $relationName => $relationInfo) {
+            try {
+                $relatedModelClass = get_class($model->$relationName()->getRelated());
+                $relatedModel = $relatedModelClass::find($relationInfo['related_id']);
+                if ($relatedModel !== null) {
+                    $model->setRelation($relationName, $relatedModel);
+                }
+            } catch (\Exception $e) {
+                \inflow_report($e, 'debug', [
+                    'operation' => 'setRelation',
+                    'relation' => $relationName,
+                ]);
+            }
+        }
+    }
+
+    // ========== Relation Sync (consolidated from RelationSyncService) ==========
+
+    /**
+     * Sync a relation for a model.
+     */
+    private function syncRelation(Model $model, string $relationName, array $relationData, array $mappingOptions, ?array $lookup = null): void
+    {
+        if (! method_exists($model, $relationName)) {
+            // Relation method doesn't exist - skip
+            return;
+        }
+
+        $relation = $model->$relationName();
+        $relationType = $this->relationTypeService->getRelationType(get_class($model), $relationName);
+
+        if ($relationType === null) {
+            // Unknown relation type - try to create
+            $relation->create($relationData);
+
+            return;
+        }
+
+        // Get appropriate strategy for relation type
+        $strategy = $this->strategyFactory->create($relationType);
+
+        // Delegate to strategy
+        $strategy->sync($model, $relationName, $relation, $relationData, $mappingOptions, $lookup);
     }
 }

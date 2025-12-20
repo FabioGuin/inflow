@@ -4,7 +4,7 @@ namespace InFlow\Services\File;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
-use InFlow\Enums\EloquentRelationType;
+use InFlow\Enums\Data\EloquentRelationType;
 
 /**
  * Service for model class selection, normalization, and validation.

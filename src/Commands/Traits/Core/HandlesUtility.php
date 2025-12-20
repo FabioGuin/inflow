@@ -16,7 +16,7 @@ trait HandlesUtility
      */
     public function getOption(string $key): mixed
     {
-        return $this->services->configResolver->resolveOption(
+        return $this->configResolver->resolveOption(
             $key,
             $this->guidedConfig,
             fn (string $optionKey) => $this->option($optionKey)
@@ -36,7 +36,7 @@ trait HandlesUtility
         $this->line(DisplayConstants::SECTION_SEPARATOR);
 
         // Business logic: format summary data
-        $formatted = $this->services->summaryFormatter->formatForTable($lineCount, $byteCount, $duration);
+        $formatted = $this->summaryFormatter->formatForTable($lineCount, $byteCount, $duration);
 
         // Presentation: display table
         $this->table($formatted['headers'], $formatted['table_data']);

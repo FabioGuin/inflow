@@ -2,8 +2,8 @@
 
 namespace InFlow\Services\File;
 
-use InFlow\Enums\FileType;
-use InFlow\Enums\StorageDirectory;
+use InFlow\Enums\File\FileType;
+use InFlow\Enums\File\StorageDirectory;
 
 /**
  * Service for finding and selecting files from common directories.

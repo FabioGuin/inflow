@@ -4,8 +4,8 @@ namespace InFlow\Mappings;
 
 use Illuminate\Database\Eloquent\Model;
 use InFlow\Services\File\ModelSelectionService;
-use InFlow\ValueObjects\ColumnMetadata;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\SourceSchema;
 
 /**
  * Encapsulates the auto-mapping suggestion heuristics.

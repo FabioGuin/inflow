@@ -4,11 +4,13 @@ namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
 use InFlow\Constants\DisplayConstants;
-use InFlow\Enums\FieldHandlerAction;
-use InFlow\Enums\InteractiveCommand;
-use InFlow\Services\Core\InFlowConsoleServices;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\Enums\Data\FieldHandlerAction;
+use InFlow\Enums\UI\InteractiveCommand;
+use InFlow\Services\Core\ConfigurationResolver;
+use InFlow\Services\Mapping\MappingValidationService;
+use InFlow\Mappings\MappingSerializer;
+use InFlow\ValueObjects\Data\SourceSchema;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\select;
@@ -19,7 +21,9 @@ class ValidationInteraction
 
     public function __construct(
         private readonly InFlowCommand $command,
-        private readonly InFlowConsoleServices $services,
+        private readonly MappingValidationService $mappingValidationService,
+        private readonly ConfigurationResolver $configResolver,
+        private readonly MappingSerializer $mappingSerializer,
         private readonly MappingInteraction $mappingInteraction
     ) {}
 
@@ -53,7 +57,7 @@ class ValidationInteraction
         ] = $validationData;
 
         $fieldInfo = $modelAnalysis['field_info'] ?? [];
-        $suggestions = $this->services->mappingValidationService->suggestAutoMapping($missingFields, $sourceSchema);
+        $suggestions = $this->mappingValidationService->suggestAutoMapping($missingFields, $sourceSchema);
 
         // Single unified display: warning + suggestions + action choice
         $this->displayValidationWarningWithSuggestions(
@@ -76,23 +80,23 @@ class ValidationInteraction
         $fillable = $model->getFillable();
         $guarded = $model->getGuarded();
 
-        $validationRules = $this->services->mappingValidationService->getModelValidationRules($modelClass);
+        $validationRules = $this->mappingValidationService->getModelValidationRules($modelClass);
 
-        $mappedData = $this->services->mappingValidationService->extractMappedColumns($mapping);
+        $mappedData = $this->mappingValidationService->extractMappedColumns($mapping);
         $mappedColumns = $mappedData['main'];
         $relationColumns = $mappedData['relations'];
         $relationMeta = $mappedData['relation_meta'] ?? [];
 
-        $modelAnalysis = $this->services->mappingValidationService->analyzeModelConstraints($modelClass, $fillable, $guarded, $validationRules);
+        $modelAnalysis = $this->mappingValidationService->analyzeModelConstraints($modelClass, $fillable, $guarded, $validationRules);
 
-        $missingFields = $this->services->mappingValidationService->identifyMissingFields(
+        $missingFields = $this->mappingValidationService->identifyMissingFields(
             $modelAnalysis['required_fields'],
             $mappedColumns,
             $validationRules,
             array_keys($relationColumns) // Exclude FK for mapped relations (auto-resolved)
         );
 
-        $missingRelationFields = $this->services->mappingValidationService->analyzeRelationConstraints($modelClass, $relationColumns, $relationMeta);
+        $missingRelationFields = $this->mappingValidationService->analyzeRelationConstraints($modelClass, $relationColumns, $relationMeta);
 
         $missingRelationRequired = [];
         $missingRelationConditional = [];
@@ -170,7 +174,7 @@ class ValidationInteraction
         }
 
         if ($this->command->getOutput()->isVerbose()) {
-            foreach ($this->services->mappingValidationService->formatModelAnalysisSummary($fillable, $guarded, $validationRules) as $line) {
+            foreach ($this->mappingValidationService->formatModelAnalysisSummary($fillable, $guarded, $validationRules) as $line) {
                 $this->command->line($line);
             }
             $this->command->newLine();
@@ -179,7 +183,7 @@ class ValidationInteraction
 
     private function displayFieldWithSuggestion(string $field, array $modelAnalysis, array $validationRules, array $fillable, array $guarded, array $suggestions): void
     {
-        $info = $this->services->mappingValidationService->getFieldInfo(
+        $info = $this->mappingValidationService->getFieldInfo(
             $field,
             $modelAnalysis['required_fields'],
             $validationRules,
@@ -187,7 +191,7 @@ class ValidationInteraction
             $guarded
         );
 
-        $line = $this->services->mappingValidationService->formatMissingFieldLine($field, $info);
+        $line = $this->mappingValidationService->formatMissingFieldLine($field, $info);
 
         // Append suggestion inline if available
         if (isset($suggestions[$field])) {
@@ -237,7 +241,7 @@ class ValidationInteraction
 
     private function applyAllSuggestions(MappingDefinition $mapping, array $suggestions, SourceSchema $sourceSchema, string $modelClass): bool|MappingDefinition
     {
-        $updatedMapping = $this->services->mappingValidationService->applyAutoMapping($mapping, $suggestions, $sourceSchema, $modelClass);
+        $updatedMapping = $this->mappingValidationService->applyAutoMapping($mapping, $suggestions, $sourceSchema, $modelClass);
 
         if ($updatedMapping === null) {
             $this->command->warning('  Failed to apply suggestions.');
@@ -245,7 +249,7 @@ class ValidationInteraction
             return true;
         }
 
-        $updatedMapping = $this->services->mappingValidationService->preserveMappingOptions($updatedMapping, $mapping);
+        $updatedMapping = $this->mappingValidationService->preserveMappingOptions($updatedMapping, $mapping);
 
         return $this->saveUpdatedMapping($updatedMapping, $modelClass);
     }
@@ -275,23 +279,23 @@ class ValidationInteraction
             return true; // No handlers needed, continue
         }
 
-        $updatedMapping = $this->services->mappingValidationService->applyFieldHandlers($mapping, $fieldHandlers, $sourceSchema, $modelClass);
+        $updatedMapping = $this->mappingValidationService->applyFieldHandlers($mapping, $fieldHandlers, $sourceSchema, $modelClass);
 
         if ($updatedMapping === null) {
             return true; // Could not apply handlers, continue anyway
         }
 
-        $updatedMapping = $this->services->mappingValidationService->preserveMappingOptions($updatedMapping, $mapping);
+        $updatedMapping = $this->mappingValidationService->preserveMappingOptions($updatedMapping, $mapping);
 
         return $this->saveUpdatedMapping($updatedMapping, $modelClass);
     }
 
     private function saveUpdatedMapping(MappingDefinition $updatedMapping, string $modelClass): bool|MappingDefinition
     {
-        $saveMappingPath = $this->services->configResolver->getMappingPathFromModel($modelClass);
+        $saveMappingPath = $this->configResolver->getMappingPathFromModel($modelClass);
 
         try {
-            $this->services->mappingSerializer->saveToFile($updatedMapping, $saveMappingPath);
+            $this->mappingSerializer->saveToFile($updatedMapping, $saveMappingPath);
             $this->command->success('Mapping updated and saved.');
             $this->command->newLine();
 

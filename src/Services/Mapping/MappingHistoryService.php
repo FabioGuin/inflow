@@ -2,7 +2,7 @@
 
 namespace InFlow\Services\Mapping;
 
-use InFlow\Enums\MappingHistoryAction;
+use InFlow\Enums\Data\MappingHistoryAction;
 
 /**
  * Service for mapping history management.

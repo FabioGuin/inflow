@@ -41,7 +41,7 @@ trait HandlesFirstTimeSetup
      */
     private function isFirstTimeSetup(): bool
     {
-        return $this->services->configResolver->isFirstTimeSetup(
+        return $this->configResolver->isFirstTimeSetup(
             fn (string $key) => $this->option($key)
         );
     }

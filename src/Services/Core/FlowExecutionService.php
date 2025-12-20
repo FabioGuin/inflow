@@ -10,7 +10,7 @@ use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
 use InFlow\Services\DataProcessing\SanitizationService;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\DetectedFormat;
+use InFlow\ValueObjects\File\DetectedFormat;
 
 /**
  * Service for flow execution business logic.

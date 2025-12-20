@@ -3,10 +3,10 @@
 namespace InFlow\Profilers;
 
 use InFlow\Contracts\ReaderInterface;
-use InFlow\Enums\ColumnType;
-use InFlow\ValueObjects\ColumnMetadata;
-use InFlow\ValueObjects\QualityReport;
-use InFlow\ValueObjects\SourceSchema;
+use InFlow\Enums\Data\ColumnType;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\QualityReport;
+use InFlow\ValueObjects\Data\SourceSchema;
 
 /**
  * Profiles data quality and generates schema + quality report

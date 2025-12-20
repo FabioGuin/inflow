@@ -2,8 +2,8 @@
 
 namespace InFlow\Mappings;
 
-use InFlow\ValueObjects\ColumnMapping;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\ValueObjects\Data\ColumnMapping;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Fluent builder for model mappings.

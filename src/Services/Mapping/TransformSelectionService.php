@@ -2,7 +2,7 @@
 
 namespace InFlow\Services\Mapping;
 
-use InFlow\Enums\TransformType;
+use InFlow\Enums\Data\TransformType;
 use InFlow\Transforms\Contracts\InteractiveTransformInterface;
 use InFlow\Transforms\Date\DateFormatTransform;
 use InFlow\Transforms\Date\ParseDateTransform;
@@ -16,7 +16,7 @@ use InFlow\Transforms\Utility\CoalesceTransform;
 use InFlow\Transforms\Utility\DefaultTransform;
 use InFlow\Transforms\Utility\RegexReplaceTransform;
 use InFlow\Transforms\Utility\SplitTransform;
-use InFlow\ValueObjects\ColumnMetadata;
+use InFlow\ValueObjects\Data\ColumnMetadata;
 
 /**
  * Service for determining available transforms based on column metadata.

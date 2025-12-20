@@ -10,10 +10,10 @@ class InFlowServiceProvider extends ServiceProvider
     {
         $this->registerCoreServices();
         $this->registerFileServices();
-        $this->registerFormatterServices();
         $this->registerDataProcessingServices();
         $this->registerMappingServices();
         $this->registerLoadingServices();
+        $this->registerETLOrchestrator();
     }
 
     /**
@@ -22,13 +22,7 @@ class InFlowServiceProvider extends ServiceProvider
     private function registerCoreServices(): void
     {
         $this->app->singleton(\InFlow\Services\Core\ConfigurationResolver::class);
-        $this->app->singleton(\InFlow\Services\Core\FlowBuilderService::class);
         $this->app->singleton(\InFlow\Services\Core\FlowExecutionService::class);
-        $this->app->singleton(\InFlow\Services\Core\FlowRunBuilderService::class);
-        $this->app->singleton(\InFlow\Services\Core\FlowEventService::class);
-        $this->app->singleton(\InFlow\Services\Core\InFlowConsoleServices::class);
-        $this->app->singleton(\InFlow\Commands\InFlowCommandContextFactory::class);
-        $this->app->singleton(\InFlow\Services\Core\InFlowPipelineRunner::class);
     }
 
     /**
@@ -43,20 +37,11 @@ class InFlowServiceProvider extends ServiceProvider
     }
 
     /**
-     * Register formatter services for display and output.
+     * Register ETL orchestrator.
      */
-    private function registerFormatterServices(): void
+    private function registerETLOrchestrator(): void
     {
-        $this->app->singleton(\InFlow\Services\Formatter\ReportFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\FormatFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\DataPreviewFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\SchemaFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\QualityReportFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\SummaryFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\ProgressFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\FlowRunResultsFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\MappingFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Formatter\FlowWarningFormatterService::class);
+        $this->app->singleton(\InFlow\Services\ETLOrchestrator::class);
     }
 
     /**
@@ -66,10 +51,8 @@ class InFlowServiceProvider extends ServiceProvider
     {
         $this->app->singleton(\InFlow\Sanitizers\RawSanitizer::class);
         $this->app->singleton(\InFlow\Services\DataProcessing\SanitizationService::class);
-        $this->app->singleton(\InFlow\Services\DataProcessing\ContentUtilityService::class);
         $this->app->singleton(\InFlow\Detectors\FormatDetector::class);
         $this->app->singleton(\InFlow\Profilers\Profiler::class);
-        $this->app->singleton(\InFlow\Services\DataProcessing\DataPreviewService::class);
         $this->app->singleton(\InFlow\Transforms\TransformEngine::class);
     }
 
@@ -81,7 +64,6 @@ class InFlowServiceProvider extends ServiceProvider
         $this->app->singleton(\InFlow\Mappings\MappingSerializer::class);
         $this->app->singleton(\InFlow\Mappings\MappingBuilder::class);
         $this->app->singleton(\InFlow\Mappings\MappingValidator::class);
-        $this->app->singleton(\InFlow\Services\Mapping\MappingProcessingService::class);
         $this->app->singleton(\InFlow\Services\Mapping\MappingGenerationService::class);
         $this->app->singleton(\InFlow\Services\Mapping\MappingHistoryService::class);
         $this->app->singleton(\InFlow\Services\Mapping\TransformSelectionService::class);
@@ -96,16 +78,12 @@ class InFlowServiceProvider extends ServiceProvider
      */
     private function registerLoadingServices(): void
     {
-        $this->app->singleton(\InFlow\Services\Loading\ColumnValueService::class);
-        $this->app->singleton(\InFlow\Services\Loading\ColumnValidationService::class);
-        $this->app->singleton(\InFlow\Services\Loading\RelationTypeService::class);
-        $this->app->singleton(\InFlow\Services\Loading\RelationLookupService::class);
+        // Essential services (used by strategies)
         $this->app->singleton(\InFlow\Services\Loading\ModelPersistenceService::class);
+        $this->app->singleton(\InFlow\Services\Loading\RelationTypeService::class);
         $this->app->singleton(\InFlow\Services\Loading\Strategies\RelationSyncStrategyFactory::class);
-        $this->app->singleton(\InFlow\Services\Loading\AttributeGroupingService::class);
-        $this->app->singleton(\InFlow\Services\Loading\RelationResolutionService::class);
-        $this->app->singleton(\InFlow\Services\Loading\RelationSyncService::class);
         $this->app->singleton(\InFlow\Services\Loading\PivotSyncService::class);
+        $this->app->singleton(\InFlow\Loaders\EloquentLoader::class);
     }
 
     public function boot(): void
@@ -122,7 +100,6 @@ class InFlowServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \InFlow\Commands\InFlowCommand::class,
-                \InFlow\Commands\GenerateTestDataCommand::class,
             ]);
         }
     }

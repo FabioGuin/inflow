@@ -4,8 +4,8 @@ namespace InFlow\Services\Mapping;
 
 use InFlow\Mappings\MappingSerializer;
 use InFlow\Services\Core\ConfigurationResolver;
-use InFlow\ValueObjects\MappingDefinition;
-use InFlow\ValueObjects\ModelMapping;
+use InFlow\ValueObjects\Mapping\MappingDefinition;
+use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Service for mapping generation business logic.

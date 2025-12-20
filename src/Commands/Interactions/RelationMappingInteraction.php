@@ -3,10 +3,11 @@
 namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
-use InFlow\Enums\EloquentRelationType;
-use InFlow\Enums\InteractiveCommand;
-use InFlow\Services\Core\InFlowConsoleServices;
-use InFlow\ValueObjects\ColumnMetadata;
+use InFlow\Enums\Data\EloquentRelationType;
+use InFlow\Enums\UI\InteractiveCommand;
+use InFlow\Services\File\ModelSelectionService;
+use InFlow\Services\Loading\RelationTypeService;
+use InFlow\ValueObjects\Data\ColumnMetadata;
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\select;
@@ -15,11 +16,12 @@ use function Laravel\Prompts\text;
 /**
  * Handles relation mapping interactions during column mapping.
  */
-class RelationMappingInteraction
+readonly class RelationMappingInteraction
 {
     public function __construct(
-        private readonly InFlowCommand $command,
-        private readonly InFlowConsoleServices $services
+        private InFlowCommand         $command,
+        private ModelSelectionService $modelSelectionService,
+        private RelationTypeService   $relationTypeService
     ) {}
 
     /**
@@ -29,14 +31,14 @@ class RelationMappingInteraction
      */
     public function askForRelationField(string $relationName, string $modelClass): string|false
     {
-        $relations = $this->services->modelSelectionService->getModelRelations($modelClass);
+        $relations = $this->modelSelectionService->getModelRelations($modelClass);
 
         if (! isset($relations[$relationName])) {
             return false;
         }
 
         $relatedModelClass = $relations[$relationName];
-        $relatedFillable = $this->services->modelSelectionService->getAllModelAttributes($relatedModelClass);
+        $relatedFillable = $this->modelSelectionService->getAllModelAttributes($relatedModelClass);
 
         if (empty($relatedFillable)) {
             // TODO: Use model introspection to find a suitable field instead of hardcoded 'name'
@@ -96,7 +98,7 @@ class RelationMappingInteraction
 
         // Check if this is a BelongsToMany relation (can have pivot fields)
         $relationType = $modelClass !== ''
-            ? $this->services->relationTypeService->getRelationType($modelClass, $selectedRelation)
+            ? $this->relationTypeService->getRelationType($modelClass, $selectedRelation)
             : null;
         $isBelongsToMany = $relationType === EloquentRelationType::BelongsToMany;
 
@@ -187,7 +189,7 @@ class RelationMappingInteraction
         }
 
         $relationName = $pathParts[0];
-        $relationType = $this->services->relationTypeService->getRelationType($modelClass, $relationName);
+        $relationType = $this->relationTypeService->getRelationType($modelClass, $relationName);
 
         // Only ask for BelongsTo and BelongsToMany (relations where we look up related models)
         $askableTypes = [EloquentRelationType::BelongsTo, EloquentRelationType::BelongsToMany];
@@ -197,7 +199,7 @@ class RelationMappingInteraction
 
         // Get related model name for display
         if (empty($relations)) {
-            $relations = $this->services->modelSelectionService->getModelRelations($modelClass);
+            $relations = $this->modelSelectionService->getModelRelations($modelClass);
         }
         $relatedModelClass = $relations[$relationName] ?? null;
         $relatedModelName = $relatedModelClass ? class_basename($relatedModelClass) : $relationName;
