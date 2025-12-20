@@ -3,12 +3,14 @@
 namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
-use InFlow\Constants\DisplayConstants;
 use InFlow\Enums\Data\CustomMappingAction;
 use InFlow\Enums\Data\EloquentRelationType;
-use InFlow\Enums\UI\InteractiveCommand;
 use InFlow\Enums\Data\MappingHistoryAction;
+use InFlow\Enums\UI\InteractiveCommand;
+use InFlow\Presenters\Contracts\PresenterInterface;
+use InFlow\Presenters\NullPresenter;
 use InFlow\Services\File\ModelSelectionService;
+use InFlow\Services\Formatter\ColumnMappingInfoFormatter;
 use InFlow\Services\Loading\RelationTypeService;
 use InFlow\Services\Mapping\MappingHistoryService;
 use InFlow\ValueObjects\Mapping\MappingDefinition;
@@ -34,8 +36,15 @@ class MappingInteraction
         private readonly InFlowCommand $command,
         private readonly ModelSelectionService $modelSelectionService,
         private readonly MappingHistoryService $mappingHistoryService,
-        private readonly RelationTypeService $relationTypeService
+        private readonly RelationTypeService $relationTypeService,
+        private readonly ColumnMappingInfoFormatter $columnMappingInfoFormatter,
+        private readonly ?PresenterInterface $presenter = null
     ) {}
+
+    private function getPresenter(): PresenterInterface
+    {
+        return $this->presenter ?? new NullPresenter;
+    }
 
     private function duplicateHandling(): DuplicateHandlingInteraction
     {
@@ -89,7 +98,8 @@ class MappingInteraction
         bool $isArrayRelation = false,
         mixed $columnMeta = null
     ): string|bool|array {
-        $this->displayColumnMappingInfo($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation);
+        $viewModel = $this->columnMappingInfoFormatter->format($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation);
+        $this->getPresenter()->presentColumnMappingInfo($viewModel);
 
         if ($this->command->isQuiet() || $this->command->option('no-interaction')) {
             $finalPath = $suggestedPath;
@@ -339,56 +349,6 @@ class MappingInteraction
             options: $options,
             default: 'continue'
         );
-    }
-
-    private function displayColumnMappingInfo(
-        string $sourceColumn,
-        string $suggestedPath,
-        float $confidence,
-        array $alternatives,
-        bool $isRelation
-    ): void {
-        $this->command->newLine();
-
-        $relationPrefix = $isRelation ? '<fg=magenta>[Relation]</> ' : '';
-        $confidenceColor = $confidence >= DisplayConstants::CONFIDENCE_THRESHOLD_HIGH ? 'green' :
-                          ($confidence >= DisplayConstants::CONFIDENCE_THRESHOLD_MEDIUM ? 'yellow' : 'red');
-
-        $this->command->line('  <fg=cyan>Column:</> <fg=yellow>'.$sourceColumn.'</>');
-        $this->command->line('  <fg=cyan>Suggested:</> '.$relationPrefix.'<fg=white>'.$suggestedPath.'</> <fg='.$confidenceColor.'>(confidence: '.number_format($confidence * 100, 0).'%)</>');
-
-        // Display alternatives
-        $fields = [];
-        $relations = [];
-
-        foreach ($alternatives as $alt) {
-            // Handle both string format and array format
-            if (is_string($alt)) {
-                $path = $alt;
-                $isRelation = str_contains($alt, '.');
-            } else {
-                $path = $alt['path'] ?? $alt;
-                $isRelation = $alt['is_relation'] ?? str_contains($path, '.');
-            }
-
-            if ($isRelation) {
-                $relations[] = $path;
-            } else {
-                $fields[] = $path;
-            }
-        }
-
-        $altParts = [];
-        if (! empty($fields)) {
-            $altParts[] = '<fg=gray>Fields:</> '.implode(', ', array_slice($fields, 0, 3));
-        }
-        if (! empty($relations)) {
-            $altParts[] = '<fg=magenta>Relations:</> '.implode(', ', array_slice($relations, 0, 3));
-        }
-
-        if (! empty($altParts)) {
-            $this->command->line('  <fg=cyan>Alternatives:</> '.implode(' | ', $altParts));
-        }
     }
 
     private function askForCustomMapping(string $sourceColumn, string $modelClass, bool $hasPrevious = false, mixed $columnMeta = null): string|false
