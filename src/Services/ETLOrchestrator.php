@@ -12,6 +12,7 @@ use InFlow\Loaders\EloquentLoader;
 use InFlow\Mappings\MappingBuilder;
 use InFlow\Mappings\MappingSerializer;
 use InFlow\Mappings\MappingValidator;
+use InFlow\Presenters\Contracts\PresenterInterface;
 use InFlow\Profilers\Profiler;
 use InFlow\Readers\CsvReader;
 use InFlow\Readers\ExcelReader;
@@ -22,15 +23,19 @@ use InFlow\Services\Core\FlowExecutionService;
 use InFlow\Services\DataProcessing\SanitizationService;
 use InFlow\Services\File\FileReaderService;
 use InFlow\Services\File\FileWriterService;
+use InFlow\Services\Formatter\FlowRunFormatter;
+use InFlow\Services\Formatter\FormatInfoFormatter;
+use InFlow\Services\Formatter\MessageFormatter;
+use InFlow\Services\Formatter\PreviewFormatter;
+use InFlow\Services\Formatter\QualityReportFormatter;
+use InFlow\Services\Formatter\SchemaFormatter;
 use InFlow\Services\Loading\PivotSyncService;
 use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Services\Mapping\MappingGenerationService;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\Data\QualityReport;
 use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
-use InFlow\ValueObjects\Flow\FlowRun;
 use InFlow\ValueObjects\Flow\ProcessingContext;
 use InFlow\ValueObjects\Mapping\MappingDefinition;
 
@@ -64,7 +69,13 @@ readonly class ETLOrchestrator
         private EloquentLoader $eloquentLoader,
         private MappingValidator $mappingValidator,
         private MappingDependencyValidator $dependencyValidator,
-        private PivotSyncService $pivotSyncService
+        private PivotSyncService $pivotSyncService,
+        private FormatInfoFormatter $formatInfoFormatter,
+        private SchemaFormatter $schemaFormatter,
+        private PreviewFormatter $previewFormatter,
+        private QualityReportFormatter $qualityReportFormatter,
+        private FlowRunFormatter $flowRunFormatter,
+        private MessageFormatter $messageFormatter
     ) {}
 
     /**
@@ -72,12 +83,13 @@ readonly class ETLOrchestrator
      *
      * @param  InFlowCommand  $command  The command instance for I/O
      * @param  ProcessingContext  $context  The initial processing context
+     * @param  PresenterInterface  $presenter  The presenter for output
      * @return ProcessingContext The updated context with results
      */
-    public function process(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    public function process(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         // Step 1: Load file
-        $context = $this->loadFile($command, $context);
+        $context = $this->loadFile($command, $context, $presenter);
         if ($context->cancelled || $context->source === null) {
             return $context;
         }
@@ -89,34 +101,34 @@ readonly class ETLOrchestrator
         }
 
         // Step 3: Sanitize (if needed)
-        $context = $this->sanitize($command, $context);
+        $context = $this->sanitize($command, $context, $presenter);
         if ($context->cancelled) {
             return $context;
         }
 
         // Step 4: Detect format
-        $context = $this->detectFormat($command, $context);
+        $context = $this->detectFormat($command, $context, $presenter);
         if ($context->cancelled || $context->format === null) {
             return $context;
         }
 
         // Step 5: Create reader
-        $context = $this->createReader($command, $context);
+        $context = $this->createReader($command, $context, $presenter);
         if ($context->cancelled || $context->reader === null) {
             return $context;
         }
 
         // Step 6: Profile data (if no mapping provided)
-        $context = $this->profileData($command, $context);
+        $context = $this->profileData($command, $context, $presenter);
 
         // Step 7: Process mapping
-        $context = $this->processMapping($command, $context);
+        $context = $this->processMapping($command, $context, $presenter);
         if ($context->cancelled || $context->mappingDefinition === null) {
             return $context;
         }
 
         // Step 8: Execute flow
-        $context = $this->executeFlow($command, $context);
+        $context = $this->executeFlow($command, $context, $presenter);
 
         return $context;
     }
@@ -124,7 +136,7 @@ readonly class ETLOrchestrator
     /**
      * Step 1: Load file and create FileSource.
      */
-    private function loadFile(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function loadFile(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         $command->infoLine('<fg=blue>Step 1/8:</> <fg=gray>Loading file...</>');
 
@@ -132,7 +144,7 @@ readonly class ETLOrchestrator
             $source = FileSource::fromPath($context->filePath);
             $context = $context->withSource($source);
 
-            $command->success('File loaded successfully');
+            $presenter->presentMessage($this->messageFormatter->success('File loaded successfully'));
             $this->displayFileInfo($command, $source);
 
             if ($this->shouldContinue($command, 'File loaded', [
@@ -144,7 +156,7 @@ readonly class ETLOrchestrator
 
             return $context->withCancelled();
         } catch (\RuntimeException $e) {
-            $command->error('Failed to load file: '.$e->getMessage());
+            $presenter->presentMessage($this->messageFormatter->error('Failed to load file: '.$e->getMessage()));
             throw $e;
         }
     }
@@ -182,7 +194,7 @@ readonly class ETLOrchestrator
     /**
      * Step 3: Sanitize content if needed.
      */
-    private function sanitize(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function sanitize(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->content === null) {
             return $context;
@@ -208,7 +220,7 @@ readonly class ETLOrchestrator
                 ->withLineCount($newLineCount)
                 ->withShouldSanitize(true);
 
-            $command->success('Sanitization completed');
+            $presenter->presentMessage($this->messageFormatter->success('Sanitization completed'));
             // Sanitization report display removed (was empty)
 
             if ($this->shouldContinue($command, 'Sanitization', [
@@ -221,7 +233,7 @@ readonly class ETLOrchestrator
             return $context->withCancelled();
         }
 
-        $command->warning('Sanitization skipped');
+        $presenter->presentMessage($this->messageFormatter->warning('Sanitization skipped'));
 
         return $context->withShouldSanitize(false);
     }
@@ -229,7 +241,7 @@ readonly class ETLOrchestrator
     /**
      * Step 4: Detect file format.
      */
-    private function detectFormat(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function detectFormat(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->source === null) {
             return $context;
@@ -241,8 +253,8 @@ readonly class ETLOrchestrator
         $format = $this->formatDetector->detect($context->source);
         $context = $context->withFormat($format);
 
-        $command->success('Format detected successfully');
-        $this->displayFormatInfo($command, $format);
+        $presenter->presentMessage($this->messageFormatter->success('Format detected successfully'));
+        $presenter->presentFormatInfo($this->formatInfoFormatter->format($format));
 
         if ($this->shouldContinue($command, 'Format detected: '.$format->type->value)) {
             return $context;
@@ -254,7 +266,7 @@ readonly class ETLOrchestrator
     /**
      * Step 5: Create reader based on format.
      */
-    private function createReader(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function createReader(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->source === null || $context->format === null) {
             return $context;
@@ -264,18 +276,18 @@ readonly class ETLOrchestrator
 
         if ($context->format->type->isCsv()) {
             $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading CSV data...</>');
-            $reader = $this->readCsvData($command, $context->source, $context->format);
+            $reader = $this->readCsvData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isExcel()) {
             $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading Excel data...</>');
-            $reader = $this->readExcelData($command, $context->source, $context->format);
+            $reader = $this->readExcelData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isJson()) {
             $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading JSON Lines data...</>');
-            $reader = $this->readJsonData($command, $context->source, $context->format);
+            $reader = $this->readJsonData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isXml()) {
             $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading XML data...</>');
-            $reader = $this->readXmlData($command, $context->source, $context->format);
+            $reader = $this->readXmlData($command, $context->source, $context->format, $presenter);
         } else {
-            $command->warning('Data reading skipped (unsupported file type: '.$context->format->type->value.')');
+            $presenter->presentMessage($this->messageFormatter->warning('Data reading skipped (unsupported file type: '.$context->format->type->value.')'));
         }
 
         if ($reader !== null) {
@@ -294,10 +306,10 @@ readonly class ETLOrchestrator
     /**
      * Step 6: Profile data if no mapping provided.
      */
-    private function profileData(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function profileData(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->reader === null) {
-            $command->warning('Profiling skipped (no data reader available)');
+            $presenter->presentMessage($this->messageFormatter->warning('Profiling skipped (no data reader available)'));
             $command->newLine();
 
             return $context;
@@ -313,12 +325,12 @@ readonly class ETLOrchestrator
 
         $context = $context->withSourceSchema($schema);
 
-        $command->success('Profiling completed');
+        $presenter->presentMessage($this->messageFormatter->success('Profiling completed'));
         $command->infoLine('  <fg=gray>→</> Analyzed <fg=yellow>'.number_format($schema->totalRows).'</> row(s)');
         $command->infoLine('  <fg=gray>→</> Detected <fg=yellow>'.count($schema->columns).'</> column(s)');
 
-        $this->displaySchema($command, $schema);
-        $this->displayQualityReport($command, $qualityReport);
+        $presenter->presentSchema($this->schemaFormatter->format($schema));
+        $presenter->presentQualityReport($this->qualityReportFormatter->format($qualityReport));
 
         if ($this->shouldContinue($command, 'Data profiling', [
             'Rows analyzed' => number_format($schema->totalRows),
@@ -334,10 +346,10 @@ readonly class ETLOrchestrator
     /**
      * Step 7: Process mapping definition.
      */
-    private function processMapping(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function processMapping(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->reader === null || $context->sourceSchema === null) {
-            $command->warning('Mapping skipped (no schema available)');
+            $presenter->presentMessage($this->messageFormatter->warning('Mapping skipped (no schema available)'));
             $command->newLine();
 
             return $context;
@@ -345,7 +357,7 @@ readonly class ETLOrchestrator
 
         $command->infoLine('<fg=blue>Step 7/8:</> <fg=gray>Processing mapping...</>');
 
-        $mappingDefinition = $this->loadOrGenerateMapping($command, $context->sourceSchema);
+        $mappingDefinition = $this->loadOrGenerateMapping($command, $context->sourceSchema, $presenter);
 
         if ($mappingDefinition === null) {
             return $context->withCancelled();
@@ -382,10 +394,10 @@ readonly class ETLOrchestrator
     /**
      * Step 8: Execute flow.
      */
-    private function executeFlow(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function executeFlow(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->mappingDefinition === null || $context->reader === null || $context->format === null) {
-            $command->warning('Flow execution skipped (no mapping available)');
+            $presenter->presentMessage($this->messageFormatter->warning('Flow execution skipped (no mapping available)'));
 
             return $context;
         }
@@ -426,7 +438,7 @@ readonly class ETLOrchestrator
         $flowRun = $executor->execute($flow, $context->filePath);
         $context = $context->withFlowRun($flowRun);
 
-        $this->displayFlowRunResults($command, $flowRun);
+        $presenter->presentFlowRun($this->flowRunFormatter->format($flowRun));
 
         return $context;
     }
@@ -439,13 +451,13 @@ readonly class ETLOrchestrator
         $threshold = 10240; // 10KB
 
         if ($fileSize > $threshold && ! $command->isQuiet()) {
-            return $this->readFileContentWithProgress($command, $source, $fileSize);
+            return $this->readFileContentWithProgress($source, $fileSize);
         }
 
         return $this->fileReader->read($source);
     }
 
-    private function readFileContentWithProgress(InFlowCommand $command, FileSource $source, int $fileSize): string
+    private function readFileContentWithProgress(FileSource $source, int $fileSize): string
     {
         $progressBar = \Laravel\Prompts\progress(
             label: 'Reading file',
@@ -465,27 +477,27 @@ readonly class ETLOrchestrator
         return $content;
     }
 
-    private function readCsvData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
+    private function readCsvData(InFlowCommand $command, FileSource $source, DetectedFormat $format, PresenterInterface $presenter): ReaderInterface
     {
-        return $this->readDataWithPreview($command, new CsvReader($source, $format));
+        return $this->readDataWithPreview($command, new CsvReader($source, $format), $presenter);
     }
 
-    private function readExcelData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
+    private function readExcelData(InFlowCommand $command, FileSource $source, DetectedFormat $format, PresenterInterface $presenter): ReaderInterface
     {
-        return $this->readDataWithPreview($command, new ExcelReader($source, $format));
+        return $this->readDataWithPreview($command, new ExcelReader($source, $format), $presenter);
     }
 
-    private function readJsonData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
+    private function readJsonData(InFlowCommand $command, FileSource $source, DetectedFormat $format, PresenterInterface $presenter): ReaderInterface
     {
-        return $this->readDataWithPreview($command, new JsonLinesReader($source, $format));
+        return $this->readDataWithPreview($command, new JsonLinesReader($source, $format), $presenter);
     }
 
-    private function readXmlData(InFlowCommand $command, FileSource $source, DetectedFormat $format): ReaderInterface
+    private function readXmlData(InFlowCommand $command, FileSource $source, DetectedFormat $format, PresenterInterface $presenter): ReaderInterface
     {
-        return $this->readDataWithPreview($command, new XmlReader($source));
+        return $this->readDataWithPreview($command, new XmlReader($source), $presenter);
     }
 
-    private function readDataWithPreview(InFlowCommand $command, ReaderInterface $reader): ReaderInterface
+    private function readDataWithPreview(InFlowCommand $command, ReaderInterface $reader, PresenterInterface $presenter): ReaderInterface
     {
         $previewRows = (int) $this->configResolver->resolveOptionWithFallback(
             'preview',
@@ -500,7 +512,7 @@ readonly class ETLOrchestrator
         $command->infoLine('<fg=green>✓ Read</> <fg=yellow>'.$rowCount.'</> row(s)');
 
         if (! empty($rows) && ! $command->isQuiet()) {
-            $this->displayPreview($command, $reader, $rows, $previewRows);
+            $presenter->presentPreview($this->previewFormatter->format($reader, $rows, $previewRows));
         }
 
         return $reader;
@@ -529,193 +541,6 @@ readonly class ETLOrchestrator
                 ['MIME Type', $source->getMimeType() ?: '<fg=gray>unknown</>'],
             ]
         );
-        $command->newLine();
-    }
-
-    private function displayFormatInfo(InFlowCommand $command, DetectedFormat $format): void
-    {
-        if ($command->isQuiet()) {
-            return;
-        }
-
-        $command->newLine();
-        $command->line('<fg=cyan>Format Information</>');
-        $command->line('─────────────────────────────────────────────────────────');
-
-        $rows = [
-            ['Type', $format->type->value],
-        ];
-
-        if ($format->delimiter !== null) {
-            $rows[] = ['Delimiter', '"'.$format->delimiter.'"'];
-        }
-
-        if ($format->encoding !== null) {
-            $rows[] = ['Encoding', $format->encoding];
-        }
-
-        $rows[] = ['Has Header', $format->hasHeader ? 'Yes' : 'No'];
-
-        $command->table(['Property', 'Value'], $rows);
-        $command->newLine();
-    }
-
-    private function displayPreview(InFlowCommand $command, ReaderInterface $reader, array $rows, int $previewRows): void
-    {
-        $command->newLine();
-        $command->line('<fg=cyan>Preview (first '.$previewRows.' rows)</>');
-        $command->line('─────────────────────────────────────────────────────────');
-
-        $headers = $reader->getHeaders();
-
-        if (! empty($headers)) {
-            $tableData = [];
-            foreach ($rows as $row) {
-                $tableData[] = array_map(fn ($col) => $col ?? '<fg=gray>null</>', array_values($row));
-            }
-            $command->table($headers, $tableData);
-        } else {
-            foreach ($rows as $idx => $row) {
-                $command->line('  <fg=gray>Row '.($idx + 1).':</> '.json_encode($row));
-            }
-        }
-
-        $command->newLine();
-    }
-
-    private function displaySchema(InFlowCommand $command, SourceSchema $schema): void
-    {
-        if ($command->isQuiet()) {
-            return;
-        }
-
-        $command->newLine();
-        $command->line('<fg=cyan>Data Schema</>');
-        $command->line('─────────────────────────────────────────────────────────');
-
-        $headers = ['Column', 'Type', 'Null %', 'Examples'];
-        $tableData = [];
-
-        foreach ($schema->columns as $column) {
-            $examples = '';
-            if (! empty($column->examples)) {
-                $examples = implode(', ', array_slice($column->examples, 0, 3));
-                if (count($column->examples) > 3) {
-                    $examples .= '...';
-                }
-            }
-
-            $nullPercent = $schema->totalRows > 0
-                ? round(($column->nullCount / $schema->totalRows) * 100, 1)
-                : 0;
-
-            $tableData[] = [
-                $column->name,
-                $column->type->value,
-                $nullPercent.'%',
-                $examples ?: '<fg=gray>none</>',
-            ];
-        }
-
-        $command->table($headers, $tableData);
-    }
-
-    private function displayQualityReport(InFlowCommand $command, QualityReport $qualityReport): void
-    {
-        if ($command->isQuiet() || ! $qualityReport->hasIssues()) {
-            if (! $command->isQuiet() && ! $qualityReport->hasIssues()) {
-                $command->newLine();
-                $command->success('Quality Report: No issues detected');
-            }
-
-            return;
-        }
-
-        $command->newLine();
-        $command->line('<fg=cyan>Quality Report</>');
-        $command->line('─────────────────────────────────────────────────────────');
-
-        if (! empty($qualityReport->errors)) {
-            $command->newLine();
-            $command->line('<fg=red>Errors:</>');
-            foreach ($qualityReport->errors as $error) {
-                $command->line("  <fg=red>•</> {$error}");
-            }
-        }
-
-        if (! empty($qualityReport->warnings)) {
-            $command->newLine();
-            $command->line('<fg=yellow>Warnings:</>');
-            foreach ($qualityReport->warnings as $warning) {
-                $command->line("  <fg=yellow>•</> {$warning}");
-            }
-        }
-
-        $command->newLine();
-    }
-
-    private function displayFlowRunResults(InFlowCommand $command, FlowRun $run): void
-    {
-        if ($command->isQuiet()) {
-            return;
-        }
-
-        $command->newLine();
-        $command->line('<fg=cyan>Flow Execution Results</>');
-        $command->line('─────────────────────────────────────────────────────────');
-
-        $statusIcon = match ($run->status->value) {
-            'completed' => '<fg=green>✓</>',
-            'partially_completed' => '<fg=yellow>⚠</>',
-            'failed' => '<fg=red>✗</>',
-            default => '○',
-        };
-
-        $command->line("{$statusIcon} Status: <fg=white>{$run->status->value}</>");
-        $command->line('  Imported: <fg=yellow>'.number_format($run->importedRows).'</>');
-        $command->line('  Skipped: <fg=yellow>'.number_format($run->skippedRows).'</>');
-        $command->line('  Errors: <fg=yellow>'.number_format($run->errorCount).'</>');
-
-        $duration = $run->getDuration();
-        if ($duration !== null) {
-            $command->line('  Duration: <fg=yellow>'.round($duration, 2).'s</>');
-        }
-
-        // Display error details if any
-        if (! empty($run->errors)) {
-            $command->newLine();
-            $command->line('<fg=red>Error Details:</>');
-            foreach ($run->errors as $index => $error) {
-                $errorNum = $index + 1;
-                $command->line("  <fg=red>Error #{$errorNum}:</>");
-
-                if (isset($error['message'])) {
-                    $command->line('    <fg=yellow>Message:</> '.$error['message']);
-                }
-
-                if (isset($error['exception'])) {
-                    $command->line('    <fg=yellow>Exception:</> '.$error['exception']);
-                }
-
-                if (isset($error['rowNumber'])) {
-                    $command->line('    <fg=yellow>Row:</> '.$error['rowNumber']);
-                }
-
-                if (isset($error['errors']) && is_array($error['errors'])) {
-                    $command->line('    <fg=yellow>Validation Errors:</>');
-                    foreach ($error['errors'] as $field => $messages) {
-                        if (is_array($messages)) {
-                            foreach ($messages as $message) {
-                                $command->line("      • <fg=gray>{$field}:</> {$message}");
-                            }
-                        } else {
-                            $command->line("      • <fg=gray>{$field}:</> {$messages}");
-                        }
-                    }
-                }
-            }
-        }
-
         $command->newLine();
     }
 
@@ -801,13 +626,13 @@ readonly class ETLOrchestrator
         );
     }
 
-    private function loadOrGenerateMapping(InFlowCommand $command, SourceSchema $sourceSchema): ?MappingDefinition
+    private function loadOrGenerateMapping(InFlowCommand $command, SourceSchema $sourceSchema, PresenterInterface $presenter): ?MappingDefinition
     {
         $mappingPath = $command->option('mapping');
         $modelClass = $command->argument('to');
 
         if ($modelClass === null) {
-            $command->error('Model class is required. Use: inflow:process file.csv App\\Models\\User');
+            $presenter->presentMessage($this->messageFormatter->error('Model class is required. Use: inflow:process file.csv App\\Models\\User'));
 
             return null;
         }
@@ -821,7 +646,7 @@ readonly class ETLOrchestrator
                 return $mapping;
             } catch (\Exception $e) {
                 \inflow_report($e, 'error', ['operation' => 'loadMapping', 'path' => $mappingPath]);
-                $command->error('Failed to load mapping: '.$e->getMessage());
+                $presenter->presentMessage($this->messageFormatter->error('Failed to load mapping: '.$e->getMessage()));
 
                 return null;
             }
@@ -841,7 +666,7 @@ readonly class ETLOrchestrator
                     return $mapping;
                 } catch (\Exception $e) {
                     \inflow_report($e, 'warning', ['operation' => 'loadExistingMapping', 'model' => $modelClass]);
-                    $command->warning('Failed to load existing mapping, generating new one...');
+                    $presenter->presentMessage($this->messageFormatter->warning('Failed to load existing mapping, generating new one...'));
                 }
             }
         }
@@ -852,7 +677,7 @@ readonly class ETLOrchestrator
             $mapping = $this->mappingBuilder->autoMapInteractive(
                 schema: $sourceSchema,
                 modelClass: $modelClass,
-                interactiveCallback: function ($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation = false, $isArrayRelation = false, $columnMeta = null) use ($command) {
+                interactiveCallback: function ($sourceColumn, $suggestedPath, $alternatives) use ($command) {
                     // Simplified mapping interaction - delegate to command if needed
                     return $command->choice(
                         "Map '{$sourceColumn}' to:",
@@ -860,12 +685,12 @@ readonly class ETLOrchestrator
                         $suggestedPath
                     );
                 },
-                transformCallback: function ($sourceColumn, $targetPath, $suggestedTransforms, $columnMeta, $targetType = null, $modelClassParam = null) {
+                transformCallback: function ($suggestedTransforms) {
                     return $suggestedTransforms; // Simplified - just use suggested
                 }
             );
 
-            $command->success('Mapping generated successfully');
+            $presenter->presentMessage($this->messageFormatter->success('Mapping generated successfully'));
             $columnCount = count($mapping->mappings[0]->columns ?? []);
             $command->infoLine('  <fg=gray>→</> <fg=yellow>'.$columnCount.'</> column(s) mapped');
 
@@ -887,7 +712,7 @@ readonly class ETLOrchestrator
             return $mapping;
         } catch (\Exception $e) {
             \inflow_report($e, 'error', ['operation' => 'generateMapping', 'model' => $modelClass]);
-            $command->error('Failed to generate mapping: '.$e->getMessage());
+            $presenter->presentMessage($this->messageFormatter->error('Failed to generate mapping: '.$e->getMessage()));
 
             return null;
         }
