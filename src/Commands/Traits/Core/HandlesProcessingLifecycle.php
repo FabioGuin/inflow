@@ -2,6 +2,7 @@
 
 namespace InFlow\Commands\Traits\Core;
 
+use Illuminate\Console\Command;
 use InFlow\Constants\DisplayConstants;
 use InFlow\ValueObjects\Flow\FlowRun;
 use InFlow\ValueObjects\Flow\ProcessingContext;
@@ -72,21 +73,21 @@ trait HandlesProcessingLifecycle
     private function getExitCode(ProcessingContext $context): int
     {
         if ($context->cancelled) {
-            return \Illuminate\Console\Command::FAILURE;
+            return Command::FAILURE;
         }
 
         if ($context->flowRun !== null && $context->flowRun->status->value === 'failed') {
-            return \Illuminate\Console\Command::FAILURE;
+            return Command::FAILURE;
         }
 
         // Treat any collected row-level errors as a failing run for the CLI process.
         // These errors are intentionally caught inside FlowExecutor to allow "continue" policies,
         // but the command should still surface them via a non-zero exit code.
         if ($context->flowRun !== null && $context->flowRun->errorCount > 0) {
-            return \Illuminate\Console\Command::FAILURE;
+            return Command::FAILURE;
         }
 
-        return \Illuminate\Console\Command::SUCCESS;
+        return Command::SUCCESS;
     }
 
     /**
