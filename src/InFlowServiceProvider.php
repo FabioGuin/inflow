@@ -13,6 +13,7 @@ class InFlowServiceProvider extends ServiceProvider
         $this->registerDataProcessingServices();
         $this->registerMappingServices();
         $this->registerLoadingServices();
+        $this->registerFormatters();
         $this->registerETLOrchestrator();
     }
 
@@ -34,6 +35,21 @@ class InFlowServiceProvider extends ServiceProvider
         $this->app->singleton(\InFlow\Services\File\FileWriterService::class);
         $this->app->singleton(\InFlow\Services\File\FileSelectionService::class);
         $this->app->singleton(\InFlow\Services\File\ModelSelectionService::class);
+    }
+
+    /**
+     * Register formatters.
+     */
+    private function registerFormatters(): void
+    {
+        $this->app->singleton(\InFlow\Services\Formatter\FormatInfoFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\SchemaFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\PreviewFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\QualityReportFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\FlowRunFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\SummaryFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\MessageFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\ColumnMappingInfoFormatter::class);
     }
 
     /**
