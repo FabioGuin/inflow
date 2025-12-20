@@ -681,6 +681,41 @@ readonly class ETLOrchestrator
             $command->line('  Duration: <fg=yellow>'.round($duration, 2).'s</>');
         }
 
+        // Display error details if any
+        if (! empty($run->errors)) {
+            $command->newLine();
+            $command->line('<fg=red>Error Details:</>');
+            foreach ($run->errors as $index => $error) {
+                $errorNum = $index + 1;
+                $command->line("  <fg=red>Error #{$errorNum}:</>");
+
+                if (isset($error['message'])) {
+                    $command->line('    <fg=yellow>Message:</> '.$error['message']);
+                }
+
+                if (isset($error['exception'])) {
+                    $command->line('    <fg=yellow>Exception:</> '.$error['exception']);
+                }
+
+                if (isset($error['rowNumber'])) {
+                    $command->line('    <fg=yellow>Row:</> '.$error['rowNumber']);
+                }
+
+                if (isset($error['errors']) && is_array($error['errors'])) {
+                    $command->line('    <fg=yellow>Validation Errors:</>');
+                    foreach ($error['errors'] as $field => $messages) {
+                        if (is_array($messages)) {
+                            foreach ($messages as $message) {
+                                $command->line("      • <fg=gray>{$field}:</> {$message}");
+                            }
+                        } else {
+                            $command->line("      • <fg=gray>{$field}:</> {$messages}");
+                        }
+                    }
+                }
+            }
+        }
+
         $command->newLine();
     }
 

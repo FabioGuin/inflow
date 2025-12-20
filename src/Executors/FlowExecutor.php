@@ -6,19 +6,19 @@ use Illuminate\Validation\ValidationException;
 use InFlow\Loaders\EloquentLoader;
 use InFlow\Mappings\MappingValidator;
 use InFlow\Profilers\Profiler;
-use InFlow\Services\Loading\PivotSyncService;
-use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Readers\CsvReader;
 use InFlow\Readers\ExcelReader;
 use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
 use InFlow\Services\Core\FlowExecutionService;
+use InFlow\Services\Loading\PivotSyncService;
+use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Sources\FileSource;
+use InFlow\ValueObjects\Data\Row;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
 use InFlow\ValueObjects\Flow\FlowRun;
 use InFlow\ValueObjects\Mapping\ModelMapping;
-use InFlow\ValueObjects\Data\Row;
 
 /**
  * Executor for orchestrating the complete ETL pipeline
@@ -381,6 +381,36 @@ class FlowExecutor
             'id' => $rowId,
         ];
 
+    }
+
+    /**
+     * Process a single row with all model mappings in the flow.
+     *
+     * @param  Row  $row  The row to process
+     * @param  Flow  $flow  The flow configuration
+     * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
+     * @param  FlowRun  $run  The current flow run
+     * @return array{run: FlowRun, shouldStop: bool} Processing result
+     */
+    private function processRow(Row $row, Flow $flow, array &$executionStatistics, FlowRun $run): array
+    {
+        if ($flow->mapping === null) {
+            return ['run' => $run, 'shouldStop' => false];
+        }
+
+        // Process each model mapping in the mapping definition
+        foreach ($flow->mapping->mappings as $modelMapping) {
+            $result = $this->processModelMappingForRow($row, $modelMapping, $flow, $executionStatistics, $run);
+
+            // If we should stop, return immediately
+            if ($result['shouldStop']) {
+                return $result;
+            }
+
+            $run = $result['run'];
+        }
+
+        return ['run' => $run, 'shouldStop' => false];
     }
 
     /**
