@@ -296,4 +296,3 @@ class BelongsToManySyncStrategy extends AbstractRelationSyncStrategy implements 
         $relation->detach(array_keys($syncData));
     }
 }
-

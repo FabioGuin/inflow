@@ -49,4 +49,3 @@ readonly class DetectedFormat
         ];
     }
 }
-

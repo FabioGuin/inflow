@@ -10,9 +10,13 @@ namespace InFlow\Sanitizers;
 final class SanitizerStatisticsKeys
 {
     public const string BomRemoved = 'bom_removed';
+
     public const string BomBytesRemoved = 'bom_bytes_removed';
+
     public const string NewlinesNormalized = 'newlines_normalized';
+
     public const string ControlCharsRemoved = 'control_chars_removed';
+
     public const string EofFixed = 'eof_fixed';
 
     /**

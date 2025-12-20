@@ -10,9 +10,13 @@ namespace InFlow\Sanitizers;
 final class SanitizerStatLabels
 {
     public const string BomRemoved = 'BOM markers removed';
+
     public const string BomBytesRemoved = 'BOM bytes removed';
+
     public const string NewlinesNormalized = 'Newlines normalized';
+
     public const string ControlCharsRemoved = 'Control characters removed';
+
     public const string EofFixed = 'EOF fixes applied';
 
     /**

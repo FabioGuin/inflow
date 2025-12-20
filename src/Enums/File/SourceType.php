@@ -27,4 +27,3 @@ enum SourceType: string
         return in_array($type, self::values(), true);
     }
 }
-

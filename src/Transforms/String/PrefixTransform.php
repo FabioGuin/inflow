@@ -22,7 +22,7 @@ readonly class PrefixTransform implements InteractiveTransformInterface, Transfo
             return $value;
         }
 
-        return $this->prefix. $value;
+        return $this->prefix.$value;
     }
 
     public function getName(): string

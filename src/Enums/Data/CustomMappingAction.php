@@ -58,4 +58,3 @@ enum CustomMappingAction: string
         return $options;
     }
 }
-

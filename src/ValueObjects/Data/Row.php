@@ -54,4 +54,3 @@ readonly class Row
         return true;
     }
 }
-

@@ -6,9 +6,9 @@ use InFlow\Commands\InFlowCommand;
 use InFlow\Constants\DisplayConstants;
 use InFlow\Enums\Data\FieldHandlerAction;
 use InFlow\Enums\UI\InteractiveCommand;
+use InFlow\Mappings\MappingSerializer;
 use InFlow\Services\Core\ConfigurationResolver;
 use InFlow\Services\Mapping\MappingValidationService;
-use InFlow\Mappings\MappingSerializer;
 use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\Mapping\MappingDefinition;
 

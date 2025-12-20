@@ -98,4 +98,3 @@ class HasOneSyncStrategy extends AbstractRelationSyncStrategy implements Relatio
         $model->setRelation($relationName, $relatedModel);
     }
 }
-

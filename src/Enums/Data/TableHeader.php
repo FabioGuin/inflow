@@ -64,4 +64,3 @@ enum TableHeader: string
         ];
     }
 }
-

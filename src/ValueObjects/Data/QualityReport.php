@@ -57,4 +57,3 @@ readonly class QualityReport
         ];
     }
 }
-

@@ -28,4 +28,3 @@ enum AnsiEscapeCode: string
         return in_array($code, self::values(), true);
     }
 }
-

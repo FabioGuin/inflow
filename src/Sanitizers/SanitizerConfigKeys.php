@@ -10,9 +10,13 @@ namespace InFlow\Sanitizers;
 final class SanitizerConfigKeys
 {
     public const string RemoveBom = 'remove_bom';
+
     public const string NormalizeNewlines = 'normalize_newlines';
+
     public const string NewlineFormat = 'newline_format';
+
     public const string RemoveControlChars = 'remove_control_chars';
+
     public const string HandleTruncatedEof = 'handle_truncated_eof';
 
     /**

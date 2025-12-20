@@ -45,4 +45,3 @@ readonly class SourceSchema
         ];
     }
 }
-

@@ -64,4 +64,3 @@ enum FileType: string
         return $this === self::Xml;
     }
 }
-

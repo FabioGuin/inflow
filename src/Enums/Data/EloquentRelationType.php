@@ -46,4 +46,3 @@ enum EloquentRelationType: string
         return false;
     }
 }
-

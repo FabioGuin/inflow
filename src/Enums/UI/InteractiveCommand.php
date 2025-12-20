@@ -38,4 +38,3 @@ enum InteractiveCommand: string
         return self::Back->matches($value);
     }
 }
-

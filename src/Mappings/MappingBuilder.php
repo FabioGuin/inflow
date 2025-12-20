@@ -228,6 +228,7 @@ readonly class MappingBuilder
                 'field' => $lookupField,
                 'create_if_missing' => true,
             ];
+
             return [$cleanPath, $relationLookup];
         }
 
@@ -284,7 +285,7 @@ readonly class MappingBuilder
 
         try {
             $parentModel = new $modelClass;
-            
+
             if (! method_exists($parentModel, $relationName)) {
                 return $this->getFallbackLookupField($modelClass, $relationName);
             }
@@ -296,7 +297,7 @@ readonly class MappingBuilder
 
             // Get fillable fields from related model
             $fillable = $relatedModel->getFillable();
-            
+
             if (empty($fillable)) {
                 return $primaryKey; // Fallback to primary key if no fillable
             }
@@ -337,7 +338,7 @@ readonly class MappingBuilder
         } catch (\Exception $e) {
             // Ignore
         }
-        
+
         return 'id'; // Ultimate fallback
     }
 
@@ -350,6 +351,7 @@ readonly class MappingBuilder
     {
         try {
             $indexes = DB::select("SHOW INDEX FROM `{$table}` WHERE Non_unique = 0");
+
             return array_unique(array_column($indexes, 'Column_name'));
         } catch (\Exception $e) {
             return [];

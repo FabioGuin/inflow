@@ -496,9 +496,9 @@ class MappingSuggestionEngine
         // Check if source column contains a relation name (e.g., "tags.tag" contains "tags")
         foreach ($relations as $relationName => $relationClass) {
             $normalizedRelation = $this->normalizeColumnName($relationName);
-            
+
             // Check if relation name is a prefix of source column (e.g., "tags" is prefix of "tags.tag")
-            if (str_starts_with($normalizedSource, $normalizedRelation.'.') || 
+            if (str_starts_with($normalizedSource, $normalizedRelation.'.') ||
                 str_starts_with($normalizedSource, $normalizedRelation.'_')) {
                 return $relationName;
             }

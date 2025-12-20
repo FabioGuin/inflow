@@ -22,7 +22,7 @@ readonly class SuffixTransform implements InteractiveTransformInterface, Transfo
             return $value;
         }
 
-        return $value .$this->suffix;
+        return $value.$this->suffix;
     }
 
     public function getName(): string

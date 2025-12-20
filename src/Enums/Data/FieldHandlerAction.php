@@ -57,4 +57,3 @@ enum FieldHandlerAction: string
         return $options;
     }
 }
-

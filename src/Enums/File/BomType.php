@@ -72,4 +72,3 @@ enum BomType: string
         return null;
     }
 }
-

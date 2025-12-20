@@ -51,4 +51,3 @@ enum DuplicateStrategy: string
         return $options;
     }
 }
-

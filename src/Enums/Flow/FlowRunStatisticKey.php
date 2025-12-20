@@ -32,4 +32,3 @@ enum FlowRunStatisticKey: string
         return in_array($key, self::values(), true);
     }
 }
-

@@ -88,4 +88,3 @@ class BelongsToSyncStrategy extends AbstractRelationSyncStrategy implements Rela
         $model->setRelation($relationName, $relatedModel);
     }
 }
-

@@ -28,4 +28,3 @@ enum ErrorPolicy: string
         return in_array($policy, self::values(), true);
     }
 }
-

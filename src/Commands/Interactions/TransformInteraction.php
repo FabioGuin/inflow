@@ -3,9 +3,9 @@
 namespace InFlow\Commands\Interactions;
 
 use InFlow\Commands\InFlowCommand;
-use InFlow\Services\Mapping\TransformSelectionService;
-use InFlow\Services\Mapping\TransformFormatterService;
 use InFlow\Services\Mapping\ModelCastService;
+use InFlow\Services\Mapping\TransformFormatterService;
+use InFlow\Services\Mapping\TransformSelectionService;
 
 use function Laravel\Prompts\multiselect;
 

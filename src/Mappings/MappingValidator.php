@@ -191,7 +191,6 @@ class MappingValidator
      * @param  string  $modelClass  The model class
      * @param  string  $uniqueKey  The unique key field name
      * @param  mixed  $value  The unique key value
-     * @return \Illuminate\Database\Eloquent\Model|null
      */
     private function findExistingRecord(string $modelClass, string $uniqueKey, mixed $value): ?\Illuminate\Database\Eloquent\Model
     {

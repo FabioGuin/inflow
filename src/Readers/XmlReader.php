@@ -264,7 +264,7 @@ class XmlReader implements ReaderInterface
                         if (! isset($result[$childPrefix])) {
                             $result[$childPrefix] = [];
                         }
-                        
+
                         // Remove prefix from nested keys to create clean array elements
                         $cleanNested = [];
                         foreach ($nested as $nestedKey => $nestedValue) {
@@ -272,7 +272,7 @@ class XmlReader implements ReaderInterface
                             $cleanKey = str_replace($childPrefix.'.', '', $nestedKey);
                             $cleanNested[$cleanKey] = $nestedValue;
                         }
-                        
+
                         // Add nested data as array element
                         $result[$childPrefix][] = $cleanNested;
                     } else {

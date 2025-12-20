@@ -48,4 +48,3 @@ enum StorageDirectory: string
         ];
     }
 }
-

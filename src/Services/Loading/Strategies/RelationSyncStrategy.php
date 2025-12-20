@@ -32,4 +32,3 @@ interface RelationSyncStrategy
         ?array $lookup = null
     ): void;
 }
-

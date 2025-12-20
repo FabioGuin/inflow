@@ -14,7 +14,7 @@ use InFlow\Transforms\Contracts\InteractiveTransformInterface;
 readonly class TruncateTransform implements InteractiveTransformInterface, TransformStepInterface
 {
     public function __construct(
-        private int    $length = 255,
+        private int $length = 255,
         private string $end = '...'
     ) {}
 

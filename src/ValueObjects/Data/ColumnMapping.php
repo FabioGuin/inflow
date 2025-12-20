@@ -76,4 +76,3 @@ readonly class ColumnMapping
         return str_contains($this->targetPath, '?');
     }
 }
-

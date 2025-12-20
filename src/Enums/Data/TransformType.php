@@ -65,4 +65,3 @@ enum TransformType: string
         return in_array($type, self::values(), true);
     }
 }
-

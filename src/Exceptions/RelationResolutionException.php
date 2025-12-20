@@ -141,4 +141,3 @@ class RelationResolutionException extends RuntimeException
         };
     }
 }
-

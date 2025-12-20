@@ -19,9 +19,9 @@ use function Laravel\Prompts\text;
 readonly class RelationMappingInteraction
 {
     public function __construct(
-        private InFlowCommand         $command,
+        private InFlowCommand $command,
         private ModelSelectionService $modelSelectionService,
-        private RelationTypeService   $relationTypeService
+        private RelationTypeService $relationTypeService
     ) {}
 
     /**
@@ -140,6 +140,7 @@ readonly class RelationMappingInteraction
         if ($mappingType === 'array') {
             // Map entire array to relation using relation.* syntax
             $this->command->note("  <fg=gray>Array → Relation: Mapping entire array to relation '{$selectedRelation}.*'</>");
+
             return $selectedRelation.'.*';
         }
 

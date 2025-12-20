@@ -222,4 +222,3 @@ class ProcessingContext
         return $new;
     }
 }
-
