@@ -13,9 +13,12 @@ use InFlow\Commands\Traits\Core\HandlesUtility;
 // Data Processing Traits
 use InFlow\Commands\Traits\DataProcessing\HandlesSanitization;
 use InFlow\Commands\Traits\File\HandlesFileSelection;
+use InFlow\Presenters\ConsolePresenter;
 use InFlow\Services\Core\ConfigurationResolver;
 use InFlow\Services\ETLOrchestrator;
 use InFlow\Services\File\FileSelectionService;
+use InFlow\Services\Formatter\FlowRunFormatter;
+use InFlow\Services\Formatter\SummaryFormatter;
 use InFlow\Services\Formatter\SummaryFormatterService;
 
 class InFlowCommand extends Command
@@ -35,7 +38,9 @@ class InFlowCommand extends Command
         private readonly ConfigurationResolver $configResolver,
         private readonly FileSelectionService $fileSelectionService,
         private readonly SummaryFormatterService $summaryFormatter,
-        private readonly ETLOrchestrator $orchestrator
+        private readonly ETLOrchestrator $orchestrator,
+        private readonly FlowRunFormatter $flowRunFormatter,
+        private readonly SummaryFormatter $summaryFormatterNew
     ) {
         parent::__construct();
     }
@@ -94,9 +99,10 @@ class InFlowCommand extends Command
             $filePath = $this->requireFilePath();
             $context = $this->createProcessingContext($filePath, $startTime);
 
-            $context = $this->orchestrator->process($this, $context);
+            $presenter = new ConsolePresenter($this);
+            $context = $this->orchestrator->process($this, $context, $presenter);
 
-            $this->displayProcessingSummary($context, $startTime);
+            $this->displayProcessingSummary($context, $startTime, $presenter, $this->flowRunFormatter, $this->summaryFormatterNew);
 
             return $this->getExitCode($context);
         } catch (\RuntimeException $e) {
