@@ -5,8 +5,11 @@ namespace InFlow\Services;
 use InFlow\Commands\InFlowCommand;
 use InFlow\Contracts\ReaderInterface;
 use InFlow\Detectors\FormatDetector;
+use InFlow\Enums\File\NewlineFormat;
 use InFlow\Enums\File\SourceType;
 use InFlow\Enums\Flow\ErrorPolicy;
+use InFlow\Enums\UI\MessageType;
+use InFlow\Sanitizers\SanitizerConfigKeys;
 use InFlow\Executors\FlowExecutor;
 use InFlow\Loaders\EloquentLoader;
 use InFlow\Mappings\MappingBuilder;
@@ -97,7 +100,7 @@ readonly class ETLOrchestrator
     public function process(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         // Step 1: Load file
-        $context = $this->loadFile($command, $context, $presenter);
+        $context = $this->loadFile($context, $presenter);
         if ($context->cancelled || $context->source === null) {
             return $context;
         }
@@ -115,7 +118,7 @@ readonly class ETLOrchestrator
         }
 
         // Step 4: Detect format
-        $context = $this->detectFormat($command, $context, $presenter);
+        $context = $this->detectFormat($context, $presenter);
         if ($context->cancelled || $context->format === null) {
             return $context;
         }
@@ -127,7 +130,7 @@ readonly class ETLOrchestrator
         }
 
         // Step 6: Profile data (if no mapping provided)
-        $context = $this->profileData($command, $context, $presenter);
+        $context = $this->profileData($context, $presenter);
 
         // Step 7: Process mapping
         $context = $this->processMapping($command, $context, $presenter);
@@ -144,7 +147,7 @@ readonly class ETLOrchestrator
     /**
      * Step 1: Load file and create FileSource.
      */
-    private function loadFile(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
+    private function loadFile(ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         $presenter->presentStepProgress($this->stepProgressFormatter->format(1, 8, 'Loading file...'));
 
@@ -152,7 +155,7 @@ readonly class ETLOrchestrator
             $source = FileSource::fromPath($context->filePath);
             $context = $context->withSource($source);
 
-            $presenter->presentMessage($this->messageFormatter->success('File loaded successfully'));
+            $presenter->presentMessage($this->messageFormatter->format('File loaded successfully', MessageType::Success));
             $presenter->presentFileInfo($this->fileInfoFormatter->format($source));
 
             if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('File loaded', [
@@ -164,7 +167,7 @@ readonly class ETLOrchestrator
 
             return $context->withCancelled();
         } catch (\RuntimeException $e) {
-            $presenter->presentMessage($this->messageFormatter->error('Failed to load file: '.$e->getMessage()));
+            $presenter->presentMessage($this->messageFormatter->format('Failed to load file: '.$e->getMessage(), MessageType::Error));
             throw $e;
         }
     }
@@ -212,19 +215,21 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        $shouldSanitize = $this->determineShouldSanitize($command, $context);
+        $shouldSanitize = $this->determineShouldSanitize($command);
 
         if ($shouldSanitize) {
             $presenter->presentStepProgress($this->stepProgressFormatter->format(3, 8, 'Sanitizing content...'));
-            $presenter->presentMessage($this->messageFormatter->info('Cleaning file: removing BOM, normalizing newlines, removing control characters.'));
+            $presenter->presentMessage($this->messageFormatter->format('Cleaning file: removing BOM, normalizing newlines, removing control characters.', MessageType::Info));
 
             $lineCount = $context->lineCount ?? 0;
-            $sanitizerConfig = $this->getSanitizerConfig($command);
+            $sanitizerConfig = $this->configResolver->buildSanitizerConfig(
+                fn (string $key) => $command->option($key)
+            );
             [$sanitized] = $this->sanitizationService->sanitize($context->content, $sanitizerConfig);
             $newLineCount = $this->countLines($sanitized);
 
             if ($newLineCount !== $lineCount) {
-                $presenter->presentMessage($this->messageFormatter->warning("Line count changed: {$lineCount} → {$newLineCount} (normalization effect)"));
+                $presenter->presentMessage($this->messageFormatter->format("Line count changed: {$lineCount} → {$newLineCount} (normalization effect)", MessageType::Warning));
             }
 
             $context = $context
@@ -232,7 +237,7 @@ readonly class ETLOrchestrator
                 ->withLineCount($newLineCount)
                 ->withShouldSanitize(true);
 
-            $presenter->presentMessage($this->messageFormatter->success('Sanitization completed'));
+            $presenter->presentMessage($this->messageFormatter->format('Sanitization completed', MessageType::Success));
 
             if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Sanitization', [
                 'Lines' => (string) $newLineCount,
@@ -244,7 +249,7 @@ readonly class ETLOrchestrator
             return $context->withCancelled();
         }
 
-        $presenter->presentMessage($this->messageFormatter->warning('Sanitization skipped'));
+        $presenter->presentMessage($this->messageFormatter->format('Sanitization skipped', MessageType::Warning));
 
         return $context->withShouldSanitize(false);
     }
@@ -252,19 +257,19 @@ readonly class ETLOrchestrator
     /**
      * Step 4: Detect file format.
      */
-    private function detectFormat(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
+    private function detectFormat(ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->source === null) {
             return $context;
         }
 
         $presenter->presentStepProgress($this->stepProgressFormatter->format(4, 8, 'Detecting file format...'));
-        $presenter->presentMessage($this->messageFormatter->info('Analyzing file structure to detect format, delimiter, encoding, and header presence.'));
+        $presenter->presentMessage($this->messageFormatter->format('Analyzing file structure to detect format, delimiter, encoding, and header presence.', MessageType::Info));
 
         $format = $this->formatDetector->detect($context->source);
         $context = $context->withFormat($format);
 
-        $presenter->presentMessage($this->messageFormatter->success('Format detected successfully'));
+        $presenter->presentMessage($this->messageFormatter->format('Format detected successfully', MessageType::Success));
         $presenter->presentFormatInfo($this->formatInfoFormatter->format($format));
 
         if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Format detected: '.$format->type->value, []))) {
@@ -293,12 +298,12 @@ readonly class ETLOrchestrator
             $reader = $this->readExcelData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isJson()) {
             $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading JSON Lines data...'));
-            $reader = $this->readJsonData($command, $context->source, $context->format, $presenter);
+            $reader = $this->readJsonData($command, $context->source, $presenter);
         } elseif ($context->format->type->isXml()) {
             $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading XML data...'));
-            $reader = $this->readXmlData($command, $context->source, $context->format, $presenter);
+            $reader = $this->readXmlData($command, $context->source, $presenter);
         } else {
-            $presenter->presentMessage($this->messageFormatter->warning('Data reading skipped (unsupported file type: '.$context->format->type->value.')'));
+            $presenter->presentMessage($this->messageFormatter->format('Data reading skipped (unsupported file type: '.$context->format->type->value.')', MessageType::Warning));
         }
 
         if ($reader !== null) {
@@ -315,16 +320,16 @@ readonly class ETLOrchestrator
     /**
      * Step 6: Profile data if no mapping provided.
      */
-    private function profileData(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
+    private function profileData(ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->reader === null) {
-            $presenter->presentMessage($this->messageFormatter->warning('Profiling skipped (no data reader available)'));
+            $presenter->presentMessage($this->messageFormatter->format('Profiling skipped (no data reader available)', MessageType::Warning));
 
             return $context;
         }
 
         $presenter->presentStepProgress($this->stepProgressFormatter->format(6, 8, 'Profiling data quality...'));
-        $presenter->presentMessage($this->messageFormatter->info('Analyzing data structure, types, and quality issues. This helps identify problems before import.'));
+        $presenter->presentMessage($this->messageFormatter->format('Analyzing data structure, types, and quality issues. This helps identify problems before import.', MessageType::Info));
 
         $context->reader->rewind();
         $result = $this->profiler->profile($context->reader);
@@ -333,7 +338,7 @@ readonly class ETLOrchestrator
 
         $context = $context->withSourceSchema($schema);
 
-        $presenter->presentMessage($this->messageFormatter->success('Profiling completed'));
+        $presenter->presentMessage($this->messageFormatter->format('Profiling completed', MessageType::Success));
         $presenter->presentProgressInfo($this->progressInfoFormatter->format(
             'Analyzed',
             rows: $schema->totalRows,
@@ -360,7 +365,7 @@ readonly class ETLOrchestrator
     private function processMapping(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->reader === null || $context->sourceSchema === null) {
-            $presenter->presentMessage($this->messageFormatter->warning('Mapping skipped (no schema available)'));
+            $presenter->presentMessage($this->messageFormatter->format('Mapping skipped (no schema available)', MessageType::Warning));
 
             return $context;
         }
@@ -407,16 +412,39 @@ readonly class ETLOrchestrator
     private function executeFlow(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->mappingDefinition === null || $context->reader === null || $context->format === null) {
-            $presenter->presentMessage($this->messageFormatter->warning('Flow execution skipped (no mapping available)'));
+            $presenter->presentMessage($this->messageFormatter->format('Flow execution skipped (no mapping available)', MessageType::Warning));
 
             return $context;
         }
 
         $presenter->presentStepProgress($this->stepProgressFormatter->format(8, 8, 'Executing ETL flow...'));
-        $presenter->presentMessage($this->messageFormatter->info('Importing data into database. Rows are processed in chunks for optimal performance.'));
+        $presenter->presentMessage($this->messageFormatter->format('Importing data into database. Rows are processed in chunks for optimal performance.', MessageType::Info));
 
-        $shouldSanitize = $context->shouldSanitize ?? true;
-        $sanitizerConfig = $this->getSanitizerConfig($command);
+        // JSON is source of truth, config is fallback
+        $flowConfig = $context->mappingDefinition->flowConfig ?? [];
+
+        // Sanitizer: JSON first, then config, then command option
+        $jsonSanitizer = $flowConfig['sanitizer'] ?? null;
+        if ($jsonSanitizer !== null) {
+            // Use sanitizer config from JSON
+            $shouldSanitize = $jsonSanitizer['enabled'] ?? true;
+            $sanitizerConfig = $this->normalizeSanitizerConfigFromJson($jsonSanitizer);
+        } else {
+            // Fallback to config
+            $shouldSanitize = $context->shouldSanitize ?? true;
+            $sanitizerConfig = $this->configResolver->buildSanitizerConfig(
+                fn (string $key) => $command->option($key)
+            );
+        }
+
+        // Format: JSON first, then auto-detect
+        $formatConfig = $flowConfig['format'] ?? null;
+
+        // Execution options: JSON first, then config
+        $jsonExecution = $flowConfig['execution'] ?? [];
+        $errorPolicy = $jsonExecution['error_policy']
+            ?? $this->configResolver->getExecutionConfig('error_policy', ErrorPolicy::Continue->value);
+        $errorPolicyEnum = ErrorPolicy::tryFrom($errorPolicy) ?? ErrorPolicy::Continue;
 
         $flow = new Flow(
             sourceConfig: [
@@ -424,11 +452,16 @@ readonly class ETLOrchestrator
                 'type' => SourceType::File->value,
             ],
             sanitizerConfig: $shouldSanitize ? $sanitizerConfig : [],
-            formatConfig: null, // Auto-detect
+            formatConfig: $formatConfig,
             mapping: $context->mappingDefinition,
             options: [
-                'chunk_size' => $this->configResolver->getReaderConfig('chunk_size', 1000),
-                'error_policy' => ErrorPolicy::Continue->value,
+                'chunk_size' => $jsonExecution['chunk_size']
+                    ?? $this->configResolver->getExecutionConfig('chunk_size', 1000),
+                'error_policy' => $errorPolicyEnum->value,
+                'skip_empty_rows' => $jsonExecution['skip_empty_rows']
+                    ?? $this->configResolver->getExecutionConfig('skip_empty_rows', true),
+                'truncate_long_fields' => $jsonExecution['truncate_long_fields']
+                    ?? $this->configResolver->getExecutionConfig('truncate_long_fields', true),
             ],
             name: 'Command Flow: '.basename($context->filePath),
             description: 'Flow created from command execution'
@@ -497,23 +530,23 @@ readonly class ETLOrchestrator
         return $this->readDataWithPreview($command, new ExcelReader($source, $format), $presenter);
     }
 
-    private function readJsonData(InFlowCommand $command, FileSource $source, DetectedFormat $format, PresenterInterface $presenter): ReaderInterface
+    private function readJsonData(InFlowCommand $command, FileSource $source, PresenterInterface $presenter): ReaderInterface
     {
-        return $this->readDataWithPreview($command, new JsonLinesReader($source, $format), $presenter);
+        return $this->readDataWithPreview($command, new JsonLinesReader($source), $presenter);
     }
 
-    private function readXmlData(InFlowCommand $command, FileSource $source, DetectedFormat $format, PresenterInterface $presenter): ReaderInterface
+    private function readXmlData(InFlowCommand $command, FileSource $source, PresenterInterface $presenter): ReaderInterface
     {
         return $this->readDataWithPreview($command, new XmlReader($source), $presenter);
     }
 
     private function readDataWithPreview(InFlowCommand $command, ReaderInterface $reader, PresenterInterface $presenter): ReaderInterface
     {
-        $previewRows = (int) $this->configResolver->resolveOptionWithFallback(
-            'preview',
-            fn (string $key) => $command->option($key),
-            5
-        );
+        // Get preview rows from command option, fallback to config, then default to 5
+        $previewOption = $command->option('preview');
+        $previewRows = $previewOption !== null
+            ? (int) $previewOption
+            : $this->configResolver->getExecutionConfig('preview_rows', 5);
 
         $previewData = $this->readPreview($reader, $previewRows);
         $rows = $previewData['rows'];
@@ -530,7 +563,7 @@ readonly class ETLOrchestrator
 
     // Helper methods for configuration and decisions
 
-    private function determineShouldSanitize(InFlowCommand $command, ProcessingContext $context): bool
+    private function determineShouldSanitize(InFlowCommand $command): bool
     {
         $sanitizeOption = $command->option('sanitize');
         $wasSanitizePassed = $command->hasParameterOption('--sanitize', true);
@@ -539,24 +572,14 @@ readonly class ETLOrchestrator
             return $this->parseBooleanValue($sanitizeOption);
         }
 
-        if (isset($context->guidedConfig['sanitize'])) {
-            return (bool) $context->guidedConfig['sanitize'];
+        // Use config file default: check sanitizer.enabled
+        $sanitizerEnabled = $this->configResolver->getSanitizerConfig('enabled', true);
+        if (is_bool($sanitizerEnabled)) {
+            return $sanitizerEnabled;
         }
 
-        $configDefault = $this->configResolver->getConfigDefault('sanitize');
-        if ($configDefault !== null) {
-            return (bool) $configDefault;
-        }
-
-        if ($command->isQuiet()) {
-            return true;
-        }
-
-        if (! $command->option('no-interaction')) {
-            return $command->confirm('  Do you want to sanitize the file (remove BOM, normalize newlines, etc.)?', true);
-        }
-
-        return false;
+        // Fallback: if config doesn't exist, use true as default
+        return true;
     }
 
     private function parseBooleanValue(mixed $value): bool
@@ -574,12 +597,6 @@ readonly class ETLOrchestrator
         return in_array($normalized, ['1', 'true', 'yes', 'y', 'on', 'enabled'], true);
     }
 
-    private function getSanitizerConfig(InFlowCommand $command): array
-    {
-        return $this->configResolver->buildSanitizerConfig(
-            fn (string $key) => $command->option($key)
-        );
-    }
 
     private function loadOrGenerateMapping(InFlowCommand $command, SourceSchema $sourceSchema, PresenterInterface $presenter): ?MappingDefinition
     {
@@ -587,7 +604,7 @@ readonly class ETLOrchestrator
         $modelClass = $command->argument('to');
 
         if ($modelClass === null) {
-            $presenter->presentMessage($this->messageFormatter->error('Model class is required. Use: inflow:process file.csv App\\Models\\User'));
+            $presenter->presentMessage($this->messageFormatter->format('Model class is required. Use: inflow:process file.csv App\\Models\\User', MessageType::Error));
 
             return null;
         }
@@ -601,7 +618,7 @@ readonly class ETLOrchestrator
                 return $mapping;
             } catch (\Exception $e) {
                 \inflow_report($e, 'error', ['operation' => 'loadMapping', 'path' => $mappingPath]);
-                $presenter->presentMessage($this->messageFormatter->error('Failed to load mapping: '.$e->getMessage()));
+                $presenter->presentMessage($this->messageFormatter->format('Failed to load mapping: '.$e->getMessage(), MessageType::Error));
 
                 return null;
             }
@@ -610,7 +627,7 @@ readonly class ETLOrchestrator
         // Try to find existing mapping
         $existingMappingPath = $this->configResolver->findMappingForModel($modelClass);
         if ($existingMappingPath !== null && ! $command->isQuiet() && ! $command->option('no-interaction')) {
-            $presenter->presentMessage($this->messageFormatter->info('Found existing mapping: '.$existingMappingPath));
+            $presenter->presentMessage($this->messageFormatter->format('Found existing mapping: '.$existingMappingPath, MessageType::Info));
             $useExisting = \Laravel\Prompts\confirm(label: '  Use existing mapping?', default: false, yes: 'y', no: 'n');
 
             if ($useExisting) {
@@ -621,7 +638,7 @@ readonly class ETLOrchestrator
                     return $mapping;
                 } catch (\Exception $e) {
                     \inflow_report($e, 'warning', ['operation' => 'loadExistingMapping', 'model' => $modelClass]);
-                    $presenter->presentMessage($this->messageFormatter->warning('Failed to load existing mapping, generating new one...'));
+                    $presenter->presentMessage($this->messageFormatter->format('Failed to load existing mapping, generating new one...', MessageType::Warning));
                 }
             }
         }
@@ -656,7 +673,7 @@ readonly class ETLOrchestrator
                 }
             );
 
-            $presenter->presentMessage($this->messageFormatter->success('Mapping generated successfully'));
+            $presenter->presentMessage($this->messageFormatter->format('Mapping generated successfully', MessageType::Success));
             $columnCount = count($mapping->mappings[0]->columns ?? []);
             $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapped', columns: $columnCount));
 
@@ -678,10 +695,40 @@ readonly class ETLOrchestrator
             return $mapping;
         } catch (\Exception $e) {
             \inflow_report($e, 'error', ['operation' => 'generateMapping', 'model' => $modelClass]);
-            $presenter->presentMessage($this->messageFormatter->error('Failed to generate mapping: '.$e->getMessage()));
+            $presenter->presentMessage($this->messageFormatter->format('Failed to generate mapping: '.$e->getMessage(), MessageType::Error));
 
             return null;
         }
+    }
+
+    /**
+     * Normalize sanitizer config from JSON format.
+     *
+     * Converts JSON format (newline_format as string "lf") to internal format (newline_format as character "\n").
+     *
+     * @param  array<string, mixed>  $jsonConfig  Sanitizer config from JSON
+     * @return array<string, mixed> Normalized sanitizer config
+     */
+    private function normalizeSanitizerConfigFromJson(array $jsonConfig): array
+    {
+        $normalized = [];
+
+        // Map JSON keys to internal keys
+        $normalized[SanitizerConfigKeys::RemoveBom] = $jsonConfig['remove_bom'] ?? true;
+        $normalized[SanitizerConfigKeys::NormalizeNewlines] = $jsonConfig['normalize_newlines'] ?? true;
+        $normalized[SanitizerConfigKeys::RemoveControlChars] = $jsonConfig['remove_control_chars'] ?? true;
+        $normalized[SanitizerConfigKeys::HandleTruncatedEof] = $jsonConfig['handle_truncated_eof'] ?? true;
+
+        // Convert newline_format from string ("lf") to character ("\n")
+        $newlineFormat = $jsonConfig['newline_format'] ?? 'lf';
+        if (is_string($newlineFormat) && strlen($newlineFormat) > 2) {
+            $format = NewlineFormat::tryFrom(strtolower($newlineFormat)) ?? NewlineFormat::Lf;
+            $normalized[SanitizerConfigKeys::NewlineFormat] = $format->getCharacter();
+        } else {
+            $normalized[SanitizerConfigKeys::NewlineFormat] = $newlineFormat;
+        }
+
+        return $normalized;
     }
 
     /**

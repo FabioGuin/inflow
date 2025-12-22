@@ -64,6 +64,22 @@ readonly class Flow
     }
 
     /**
+     * Check if empty rows should be skipped
+     */
+    public function shouldSkipEmptyRows(): bool
+    {
+        return $this->options['skip_empty_rows'] ?? true;
+    }
+
+    /**
+     * Check if long fields should be truncated
+     */
+    public function shouldTruncateLongFields(): bool
+    {
+        return $this->options['truncate_long_fields'] ?? true;
+    }
+
+    /**
      * Convert Flow to array for serialization
      */
     public function toArray(): array

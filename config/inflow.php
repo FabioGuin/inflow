@@ -37,48 +37,52 @@ return [
     ],
 
     'sanitizer' => [
+        'enabled' => env('INFLOW_SANITIZER_ENABLED', true),
         'remove_bom' => true,
         'normalize_newlines' => true,
-        'newline_format' => "\n", // LF
+        'newline_format' => 'lf', // 'lf', 'crlf', or 'cr'
         'remove_control_chars' => true,
         'handle_truncated_eof' => true,
     ],
 
-    'reader' => [
-        'chunk_size' => 1000,
-        'streaming' => true,
+    /*
+    |--------------------------------------------------------------------------
+    | Execution Options
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for ETL execution behavior.
+    |
+    */
+
+    'execution' => [
+        // Chunk size for processing rows (default: 1000)
+        'chunk_size' => env('INFLOW_CHUNK_SIZE', 1000),
+
+        // Error handling policy: 'stop' (fail on first error) or 'continue' (collect errors and continue)
+        'error_policy' => env('INFLOW_ERROR_POLICY', 'continue'),
+
+        // Skip empty rows during import
+        'skip_empty_rows' => env('INFLOW_SKIP_EMPTY_ROWS', true),
+
+        // Truncate string fields that exceed column maximum length
+        'truncate_long_fields' => env('INFLOW_TRUNCATE_LONG_FIELDS', true),
+
+        // Number of rows to preview when reading file (default: 5)
+        'preview_rows' => env('INFLOW_PREVIEW_ROWS', 5),
     ],
 
     /*
     |--------------------------------------------------------------------------
-    | Command Default Options
+    | Mappings Configuration
     |--------------------------------------------------------------------------
     |
-    | Default values for inflow:process command options.
-    | These can be overridden via command line arguments.
+    | Configuration for mapping file storage.
     |
     */
 
-    'command' => [
-        // Apply sanitization by default
-        'sanitize' => env('INFLOW_SANITIZE', true),
-
-        // Default output path (null = stdout)
-        'output' => env('INFLOW_OUTPUT', null),
-
-        // Newline format: lf, crlf, cr
-        'newline_format' => env('INFLOW_NEWLINE_FORMAT', 'lf'),
-
-        // BOM removal enabled by default
-        'bom_removal' => env('INFLOW_BOM_REMOVAL', true),
-
-        // Control characters removal enabled by default
-        'control_chars_removal' => env('INFLOW_CONTROL_CHARS_REMOVAL', true),
-
-        // Number of rows to preview
-        'preview' => env('INFLOW_PREVIEW', 5),
-
-        // Custom mapping file path (null = auto-detect from model)
-        'mapping' => env('INFLOW_MAPPING', null),
+    'mappings' => [
+        // Directory path where mapping files are stored (relative to package root or absolute)
+        'path' => env('INFLOW_MAPPINGS_PATH', 'mappings'),
     ],
+
 ];

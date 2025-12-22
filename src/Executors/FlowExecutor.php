@@ -2,6 +2,8 @@
 
 namespace InFlow\Executors;
 
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 use InFlow\Loaders\EloquentLoader;
 use InFlow\Mappings\MappingValidator;
@@ -320,11 +322,14 @@ class FlowExecutor
             $executionStatistics['rowNumber']++;
             $row = $this->createRowFromData($rowData, $executionStatistics['rowNumber']);
 
-            // Handle empty rows
+            // Handle empty rows (if configured to skip them)
             if ($row->isEmpty()) {
-                $this->handleEmptyRow($row, $executionStatistics);
+                if ($flow->shouldSkipEmptyRows()) {
+                    $this->handleEmptyRow($row, $executionStatistics);
 
-                continue;
+                    continue;
+                }
+                // If skip_empty_rows is false, process empty rows normally
             }
 
             // Process row
@@ -433,14 +438,14 @@ class FlowExecutor
                 $this->processPivotSync($row, $modelMapping, $executionStatistics);
             } else {
                 // Standard model mapping
-                $this->processModelMapping($row, $modelMapping, $executionStatistics);
+                $this->processModelMapping($row, $modelMapping, $flow, $executionStatistics);
             }
 
             return ['run' => $run, 'shouldStop' => false];
         } catch (ValidationException $e) {
             return $this->handleValidationError($e, $row, $flow, $executionStatistics, $run, $stopOnError);
         } catch (\Exception $e) {
-            return $this->handleProcessingError($e, $row, $flow, $executionStatistics, $run, $stopOnError);
+            return $this->handleProcessingError($e, $row, $modelMapping, $flow, $executionStatistics, $run, $stopOnError);
         }
     }
 
@@ -452,11 +457,12 @@ class FlowExecutor
      *
      * @param  Row  $row  The row to process
      * @param  ModelMapping  $modelMapping  The model mapping
+     * @param  Flow  $flow  The flow configuration
      * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
      *
      * @throws ValidationException If validation fails
      */
-    private function processModelMapping(Row $row, ModelMapping $modelMapping, array &$executionStatistics): void
+    private function processModelMapping(Row $row, ModelMapping $modelMapping, Flow $flow, array &$executionStatistics): void
     {
         // Business logic: validate row before loading
         $validationResult = $this->mappingValidator->validateRow($row, $modelMapping);
@@ -468,7 +474,7 @@ class FlowExecutor
         $this->loader->resetTruncatedFields();
 
         // Business logic: load model
-        $model = $this->loader->load($row, $modelMapping);
+        $model = $this->loader->load($row, $modelMapping, $flow->shouldTruncateLongFields());
 
         // Business logic: collect truncated fields details for this row
         $this->collectTruncatedFields($row, $executionStatistics);
@@ -592,13 +598,14 @@ class FlowExecutor
      *
      * @param  \Exception  $e  The exception
      * @param  Row  $row  The row that failed
+     * @param  ModelMapping  $modelMapping  The model mapping that failed
      * @param  Flow  $flow  The flow configuration
      * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
      * @param  FlowRun  $run  The current flow run
      * @param  bool  $stopOnError  Whether to stop on error
      * @return array{run: FlowRun, shouldStop: bool} Processing result
      */
-    private function handleProcessingError(\Exception $e, Row $row, Flow $flow, array &$executionStatistics, FlowRun $run, bool $stopOnError): array
+    private function handleProcessingError(\Exception $e, Row $row, ModelMapping $modelMapping, Flow $flow, array &$executionStatistics, FlowRun $run, bool $stopOnError): array
     {
         $decision = $this->decideOnRowError($e, $row, $flow, $executionStatistics['rowNumber']);
 
