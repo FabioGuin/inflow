@@ -9,72 +9,44 @@ use InFlow\Sanitizers\SanitizerConfigKeys;
 class ConfigurationResolver
 {
     /**
-     * Resolve option value from multiple sources in priority order.
-     *
-     * Priority order:
-     * 1. Guided config (from interactive wizard)
-     * 2. Command option (explicit override)
-     * 3. Config file default
-     *
-     * @param  string  $key  The option key to resolve
-     * @param  array<string, mixed>  $guidedConfig  Configuration from guided setup wizard
-     * @param  callable  $getCommandOption  Callback to get command option value
-     * @return mixed The resolved option value or null if not found
+     * Path to the package default config file.
      */
-    public function resolveOption(string $key, array $guidedConfig, callable $getCommandOption): mixed
+    private readonly string $packageConfigPath;
+
+    /**
+     * Directory path where mapping files are stored.
+     */
+    private readonly string $mappingsPath;
+
+    public function __construct()
     {
-        // First check guided config (from wizard)
-        if (isset($guidedConfig[$key])) {
-            return $guidedConfig[$key];
-        }
+        $this->packageConfigPath = dirname(__DIR__, 3).'/config/inflow.php';
 
-        // Then check command option (explicit override)
-        $optionValue = $getCommandOption($key);
-        if ($optionValue !== null) {
-            return $optionValue;
-        }
-
-        // Finally, fall back to config file default
-        return $this->getConfigDefault($key);
+        // Load mappings path from config with fallback to default
+        $this->mappingsPath = $this->resolveMappingsPath();
     }
 
     /**
-     * Get default value from config file.
-     *
-     * Attempts to load the value from Laravel config first, then falls back
-     * to the package default configuration file.
-     *
-     * @param  string  $key  The option key (must be a valid ConfigKey enum value)
-     * @return mixed The default value or null if not found
+     * Resolve mappings directory path from config.
      */
-    public function getConfigDefault(string $key): mixed
+    private function resolveMappingsPath(): string
     {
-        $configKeyEnum = ConfigKey::tryFrom($key);
-        if ($configKeyEnum === null) {
-            return null;
-        }
-
-        $configKey = $configKeyEnum->toConfigKey();
-
         // Try to load from Laravel config first
         if (function_exists('config')) {
-            $value = config("inflow.command.{$configKey}");
-            if ($value !== null) {
-                return $value;
+            $path = config('inflow.mappings.path');
+            if ($path !== null) {
+                return rtrim($path, '/');
             }
         }
 
-        // If not available, use package default
-        $configPath = dirname(__DIR__, 3).'/config/inflow.php';
-        if (file_exists($configPath)) {
-            $packageConfig = require $configPath;
-            $value = $packageConfig['command'][$configKey] ?? null;
-            if ($value !== null) {
-                return $value;
-            }
+        // Fall back to package config
+        $packagePath = $this->getPackageConfigValue('mappings', 'path');
+        if ($packagePath !== null) {
+            return rtrim($packagePath, '/');
         }
 
-        return null;
+        // Default fallback
+        return 'mappings';
     }
 
     /**
@@ -97,13 +69,40 @@ class ConfigurationResolver
 
         // If not available, use package default config file (always exists)
         if (empty($config)) {
-            $configPath = dirname(__DIR__, 3).'/config/inflow.php';
-            $packageConfig = require $configPath;
-            $config = $packageConfig['sanitizer'] ?? [];
+            $config = $this->getPackageConfigSection('sanitizer') ?? [];
         }
 
         // Normalize and return config
         return $this->normalizeSanitizerConfig($config);
+    }
+
+    /**
+     * Get sanitizer configuration value.
+     *
+     * Retrieves a value from the sanitizer configuration section.
+     * Tries Laravel config first, then falls back to package default config file.
+     *
+     * @param  string  $key  The configuration key (e.g., 'enabled', 'remove_bom', 'newline_format')
+     * @param  mixed  $default  Default value if not found in config
+     * @return mixed The configuration value or default
+     */
+    public function getSanitizerConfig(string $key, mixed $default = null): mixed
+    {
+        // Try to load from Laravel config first
+        if (function_exists('config')) {
+            $value = config("inflow.sanitizer.{$key}");
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        // If not available, use package default
+        $value = $this->getPackageConfigValue('sanitizer', $key);
+        if ($value !== null) {
+            return $value;
+        }
+
+        return $default;
     }
 
     /**
@@ -146,9 +145,7 @@ class ConfigurationResolver
     {
         // If config is empty, load from package config file
         if (empty($config)) {
-            $configPath = dirname(__DIR__, 3).'/config/inflow.php';
-            $packageConfig = require $configPath;
-            $config = $packageConfig['sanitizer'] ?? [];
+            $config = $this->getPackageConfigSection('sanitizer') ?? [];
         }
 
         $normalized = [];
@@ -172,9 +169,7 @@ class ConfigurationResolver
 
         // If normalized config is incomplete, merge with package defaults
         if (count($normalized) < count(SanitizerConfigKeys::all())) {
-            $configPath = dirname(__DIR__, 3).'/config/inflow.php';
-            $packageConfig = require $configPath;
-            $packageDefaults = $packageConfig['sanitizer'] ?? [];
+            $packageDefaults = $this->getPackageConfigSection('sanitizer') ?? [];
 
             // Normalize package defaults and merge
             foreach (SanitizerConfigKeys::all() as $keyValue) {
@@ -210,7 +205,7 @@ class ConfigurationResolver
         // Convert FQCN to filesystem-safe path: App\Models\User -> App_Models_User.json
         $path = str_replace('\\', '_', $modelClass);
 
-        return "mappings/{$path}.{$extension}";
+        return "{$this->mappingsPath}/{$path}.{$extension}";
     }
 
     /**
@@ -230,35 +225,6 @@ class ConfigurationResolver
         }
 
         return null;
-    }
-
-    /**
-     * Check if this is a first-time setup by detecting if any significant options are provided.
-     *
-     * A first-time setup is detected when none of the following options are specified:
-     * - --sanitize
-     * - --output
-     * - --mapping
-     * - --newline-format
-     *
-     * @param  callable  $getCommandOption  Callback to get command option value
-     * @return bool True if this appears to be a first-time setup, false otherwise
-     */
-    public function isFirstTimeSetup(callable $getCommandOption): bool
-    {
-        $significantKeys = [
-            ConfigKey::Sanitize,
-            ConfigKey::Mapping,
-            ConfigKey::NewlineFormat,
-        ];
-
-        foreach ($significantKeys as $key) {
-            if ($getCommandOption($key->value) !== null) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -282,47 +248,76 @@ class ConfigurationResolver
         }
 
         // If not available, use package default
-        $configPath = dirname(__DIR__, 3).'/config/inflow.php';
-        if (file_exists($configPath)) {
-            $packageConfig = require $configPath;
-            $value = $packageConfig['reader'][$key] ?? null;
-            if ($value !== null) {
-                return $value;
-            }
+        $value = $this->getPackageConfigValue('reader', $key);
+        if ($value !== null) {
+            return $value;
         }
 
         return $default;
     }
 
     /**
-     * Resolve option value with fallback to config default.
+     * Get execution configuration.
      *
-     * Similar to resolveOption but without guided config, useful for simple option resolution.
-     * Priority order:
-     * 1. Command option (explicit override)
-     * 2. Config file default
-     * 3. Provided fallback value
+     * Retrieves execution configuration from Laravel config or package default config file.
      *
-     * @param  string  $key  The option key to resolve
-     * @param  callable  $getCommandOption  Callback to get command option value
-     * @param  mixed  $fallback  Fallback value if not found in config
-     * @return mixed The resolved option value
+     * @param  string  $key  The configuration key (e.g., 'error_policy', 'skip_empty_rows', 'truncate_long_fields')
+     * @param  mixed  $default  Default value if not found in config
+     * @return mixed The configuration value or default
      */
-    public function resolveOptionWithFallback(string $key, callable $getCommandOption, mixed $fallback = null): mixed
+    public function getExecutionConfig(string $key, mixed $default = null): mixed
     {
-        // First check command option (explicit override)
-        $optionValue = $getCommandOption($key);
-        if ($optionValue !== null) {
-            return $optionValue;
+        // Try to load from Laravel config first
+        if (function_exists('config')) {
+            $value = config("inflow.execution.{$key}");
+            if ($value !== null) {
+                return $value;
+            }
         }
 
-        // Then check config file default
-        $configDefault = $this->getConfigDefault($key);
-        if ($configDefault !== null) {
-            return $configDefault;
+        // If not available, use package default
+        $value = $this->getPackageConfigValue('execution', $key);
+        if ($value !== null) {
+            return $value;
         }
 
-        // Finally, use provided fallback
-        return $fallback;
+        return $default;
+    }
+
+    /**
+     * Get a value from package default config file.
+     *
+     * @param  string  $section  The config section (e.g., 'command', 'reader', 'execution')
+     * @param  string  $key  The config key within the section
+     * @return mixed The config value or null if not found
+     */
+    private function getPackageConfigValue(string $section, string $key): mixed
+    {
+        if (file_exists($this->packageConfigPath)) {
+            $packageConfig = require $this->packageConfigPath;
+            $value = $packageConfig[$section][$key] ?? null;
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get an entire section from package default config file.
+     *
+     * @param  string  $section  The config section (e.g., 'sanitizer', 'reader', 'execution')
+     * @return array<string, mixed>|null The config section or null if not found
+     */
+    private function getPackageConfigSection(string $section): ?array
+    {
+        if (file_exists($this->packageConfigPath)) {
+            $packageConfig = require $this->packageConfigPath;
+
+            return $packageConfig[$section] ?? null;
+        }
+
+        return null;
     }
 }
