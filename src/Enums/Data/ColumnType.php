@@ -10,13 +10,17 @@ enum ColumnType: string
     case String = 'string';
     case Int = 'int';
     case Float = 'float';
+    case Decimal = 'decimal';
     case Date = 'date';
+    case Timestamp = 'timestamp';
+    case Time = 'time';
     case Bool = 'bool';
     case Email = 'email';
     case Url = 'url';
     case Phone = 'phone';
     case Ip = 'ip';
     case Uuid = 'uuid';
+    case Json = 'json';
 
     /**
      * Get all column types as array
@@ -49,7 +53,10 @@ enum ColumnType: string
         return match ($this) {
             self::Int => 'int',
             self::Float => 'float',
+            self::Decimal => 'decimal',
             self::Date => 'date',
+            self::Timestamp => 'datetime',
+            self::Time => 'time',
             self::Bool => 'bool',
             default => null,
         };

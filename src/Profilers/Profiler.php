@@ -25,8 +25,12 @@ class Profiler
 
     /**
      * Profile data from reader and generate schema + quality report
+     *
+     * @param  ReaderInterface  $reader  The data reader
+     * @param  array<string, ColumnType>|null  $typeOverrides  Optional type overrides for specific columns (column name => ColumnType)
+     * @return array{schema: SourceSchema, quality_report: QualityReport}
      */
-    public function profile(ReaderInterface $reader): array
+    public function profile(ReaderInterface $reader, ?array $typeOverrides = null): array
     {
         $columns = [];
         $totalRows = 0;
@@ -50,6 +54,8 @@ class Profiler
                         'unique_values' => [],
                         'numeric_values' => [],
                         'date_values' => [],
+                        'timestamp_values' => [],
+                        'time_values' => [],
                         'bool_values' => [],
                         'string_values' => [],
                         'email_values' => [],
@@ -57,6 +63,7 @@ class Profiler
                         'phone_values' => [],
                         'ip_values' => [],
                         'uuid_values' => [],
+                        'json_values' => [],
                         'examples' => [],
                     ];
                     $columnValues[$columnName] = [];
@@ -102,12 +109,26 @@ class Profiler
                     } elseif ($this->isUuid($value)) {
                         $columnStats[$columnName]['uuid_values'][] = $value;
                         $columnStats[$columnName]['string_values'][] = $value; // Also track as string
+                    } elseif ($this->isJson($value)) {
+                        $columnStats[$columnName]['json_values'][] = $value;
+                        $columnStats[$columnName]['string_values'][] = $value; // Also track as string
+                    } elseif ($this->isTimestamp($value)) {
+                        $columnStats[$columnName]['timestamp_values'][] = $value;
+                        $columnStats[$columnName]['date_values'][] = $value; // Also track as date
+                    } elseif ($this->isTime($value)) {
+                        $columnStats[$columnName]['time_values'][] = $value;
                     } elseif ($this->isDate($value)) {
                         $columnStats[$columnName]['date_values'][] = $value;
+                    } elseif ($this->isBoolean($value)) {
+                        // Check boolean before numeric to catch "1"/"0" as boolean
+                        // Track as both boolean and potentially numeric (for later analysis)
+                        $columnStats[$columnName]['bool_values'][] = $value;
+                        // Also track "1"/"0" as numeric for type detection logic
+                        if (is_numeric($value)) {
+                            $columnStats[$columnName]['numeric_values'][] = $value;
+                        }
                     } elseif ($this->isNumeric($value)) {
                         $columnStats[$columnName]['numeric_values'][] = $value;
-                    } elseif ($this->isBoolean($value)) {
-                        $columnStats[$columnName]['bool_values'][] = $value;
                     } else {
                         $columnStats[$columnName]['string_values'][] = $value;
                     }
@@ -163,7 +184,8 @@ class Profiler
 
         // Build ColumnMetadata for each column
         foreach ($columnStats as $columnName => $stats) {
-            $type = $this->detectType($stats, $totalRows);
+            // Apply type override if provided, otherwise detect automatically
+            $type = $typeOverrides[$columnName] ?? $this->detectType($stats, $totalRows);
             $min = null;
             $max = null;
 
@@ -236,6 +258,7 @@ class Profiler
         $phoneCount = count($stats['phone_values'] ?? []);
         $ipCount = count($stats['ip_values'] ?? []);
         $uuidCount = count($stats['uuid_values'] ?? []);
+        $jsonCount = count($stats['json_values'] ?? []);
         $stringCount = count($stats['string_values']);
 
         $numericRatio = $numericCount / $nonNullCount;
@@ -246,12 +269,20 @@ class Profiler
         $phoneRatio = $phoneCount / $nonNullCount;
         $ipRatio = $ipCount / $nonNullCount;
         $uuidRatio = $uuidCount / $nonNullCount;
+        $jsonRatio = $jsonCount / $nonNullCount;
 
-        // Type detection priority: bool > specialized types > date > numeric > string
+        // Type detection priority: bool > specialized types > json > timestamp > time > date > decimal > numeric > string
         // Use lower thresholds for better detection, but require minimum counts
 
         // Boolean: at least 80% boolean values AND at least 2 boolean values
-        if ($boolRatio >= 0.8 && $boolCount >= 2) {
+        // OR if column has only "1"/"0" values (common CSV boolean pattern)
+        $boolValues = array_unique($stats['bool_values'] ?? []);
+        $onlyOneZero = $nonNullCount > 0 && 
+                       $boolCount >= 2 &&
+                       count($boolValues) <= 2 &&
+                       empty(array_diff($boolValues, ['1', '0', 1, 0, 'true', 'false', true, false]));
+
+        if (($boolRatio >= 0.8 && $boolCount >= 2) || $onlyOneZero) {
             return ColumnType::Bool;
         }
 
@@ -272,6 +303,23 @@ class Profiler
             return ColumnType::Uuid;
         }
 
+        // JSON: at least 70% JSON values AND at least 2 JSON values
+        // JSON strings are valid JSON arrays or objects
+        if ($jsonRatio >= 0.7 && $jsonCount >= 2) {
+            return ColumnType::Json;
+        }
+
+        // Timestamp: at least 60% timestamp values AND at least 2 values
+        // Timestamp values are also tracked as dates, so we check timestamp ratio first
+        if ($timestampRatio >= 0.6 && $timestampCount >= 2) {
+            return ColumnType::Timestamp;
+        }
+
+        // Time: at least 70% time values AND at least 2 values
+        if ($timeRatio >= 0.7 && $timeCount >= 2) {
+            return ColumnType::Time;
+        }
+
         // Date: at least 60% date values AND at least 2 date values AND more dates than strings
         if ($dateRatio >= 0.6 && $dateCount >= 2 && $dateCount > $stringCount) {
             return ColumnType::Date;
@@ -280,22 +328,34 @@ class Profiler
         // Numeric: at least 60% numeric values AND at least 2 numeric values
         // OR if all non-null values are numeric (even if ratio is lower due to many nulls)
         if (($numericRatio >= 0.6 && $numericCount >= 2) || ($numericCount > 0 && $numericCount === $nonNullCount)) {
-            // Distinguish int vs float
-            $hasFloat = false;
+            // Check if it's decimal (money-like: 2-4 decimal places, often used for prices)
+            $hasDecimal = false;
+            $decimalPlaces = 0;
             $sampleSize = min(100, $numericCount);
             foreach (array_slice($stats['numeric_values'], 0, $sampleSize) as $value) {
                 if (is_numeric($value)) {
                     $floatVal = (float) $value;
-                    $intVal = (int) $value;
+                    $intVal = (int) $floatVal;
+                    
                     // Check if it's actually a float (has decimal part)
                     if ($floatVal != $intVal) {
-                        $hasFloat = true;
-                        break;
+                        $hasDecimal = true;
+                        // Count decimal places
+                        $parts = explode('.', (string) $value);
+                        if (isset($parts[1])) {
+                            $decimals = strlen(rtrim($parts[1], '0'));
+                            $decimalPlaces = max($decimalPlaces, $decimals);
+                        }
                     }
                 }
             }
 
-            return $hasFloat ? ColumnType::Float : ColumnType::Int;
+            // If has decimals and typically 2-4 decimal places, it's likely decimal/money
+            if ($hasDecimal && $decimalPlaces >= 2 && $decimalPlaces <= 4) {
+                return ColumnType::Decimal;
+            }
+
+            return $hasDecimal ? ColumnType::Float : ColumnType::Int;
         }
 
         return ColumnType::String;
@@ -409,7 +469,7 @@ class Profiler
 
     /**
      * Check if value is boolean
-     * Note: "1" and "0" are NOT considered booleans (they are numeric)
+     * Supports: true/false, yes/no, y/n, and "1"/"0" (when used as boolean)
      */
     private function isBoolean(mixed $value): bool
     {
@@ -423,8 +483,7 @@ class Profiler
 
         $lower = strtolower(trim($value));
 
-        // Exclude numeric strings - they should be detected as numeric, not bool
-        return in_array($lower, ['true', 'false', 'yes', 'no', 'y', 'n'], true);
+        return in_array($lower, ['true', 'false', 'yes', 'no', 'y', 'n', '1', '0'], true);
     }
 
     /**
@@ -560,6 +619,102 @@ class Profiler
         $uuidPattern = '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i';
 
         return (bool) preg_match($uuidPattern, $value);
+    }
+
+    /**
+     * Check if value is a valid JSON string (array or object)
+     */
+    private function isJson(mixed $value): bool
+    {
+        if (! is_string($value) || empty($value)) {
+            return false;
+        }
+
+        $trimmed = trim($value);
+
+        // Must start with [ (array) or { (object)
+        if (! (str_starts_with($trimmed, '[') || str_starts_with($trimmed, '{'))) {
+            return false;
+        }
+
+        // Try to decode and verify it's valid JSON
+        $decoded = json_decode($trimmed, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            return false;
+        }
+
+        // Must decode to array or object (not scalar)
+        return is_array($decoded) || is_object($decoded);
+    }
+
+    /**
+     * Check if value is a timestamp (datetime with time component)
+     */
+    private function isTimestamp(mixed $value): bool
+    {
+        if (! is_string($value) || empty($value)) {
+            return false;
+        }
+
+        $trimmed = trim($value);
+
+        // Timestamp patterns (date + time)
+        $timestampPatterns = [
+            '/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/', // YYYY-MM-DD HH:MM:SS
+            '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/', // YYYY-MM-DDTHH:MM:SS (ISO)
+            '/^\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?$/i', // MM/DD/YYYY HH:MM:SS [AM/PM]
+            '/^\d{2}\.\d{2}\.\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?$/', // DD.MM.YYYY HH:MM:SS
+        ];
+
+        foreach ($timestampPatterns as $pattern) {
+            if (preg_match($pattern, $trimmed)) {
+                $timestamp = strtotime($trimmed);
+                if ($timestamp !== false && $timestamp > 0) {
+                    return true;
+                }
+            }
+        }
+
+        // Try strtotime as fallback
+        $timestamp = strtotime($trimmed);
+        if ($timestamp !== false && $timestamp > 0) {
+            // Must contain both date and time separators/indicators
+            if (preg_match('/[-\/\.]/', $trimmed) && preg_match('/[:\s]/', $trimmed)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if value is a time (only time, no date)
+     */
+    private function isTime(mixed $value): bool
+    {
+        if (! is_string($value) || empty($value)) {
+            return false;
+        }
+
+        $trimmed = trim($value);
+
+        // Time patterns (no date component)
+        $timePatterns = [
+            '/^\d{1,2}:\d{2}(?::\d{2})?(?:\s+[AP]M)?$/i', // HH:MM:SS [AM/PM]
+            '/^\d{2}:\d{2}:\d{2}$/', // HH:MM:SS (24h)
+            '/^\d{1,2}:\d{2}$/', // HH:MM
+        ];
+
+        foreach ($timePatterns as $pattern) {
+            if (preg_match($pattern, $trimmed)) {
+                // Verify it's not a date by checking it doesn't have date separators
+                if (! preg_match('/[-\/\.]/', $trimmed)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
