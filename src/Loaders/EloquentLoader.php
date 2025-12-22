@@ -64,12 +64,13 @@ class EloquentLoader
     /**
      * Load a row into a model using the mapping definition
      *
+     * @param  bool  $truncateLongFields  Whether to truncate fields that exceed column max length
      * @return Model|null The loaded model, or null if the model was skipped (e.g., duplicate with 'skip' strategy)
      */
-    public function load(Row $row, ModelMapping $mapping): ?Model
+    public function load(Row $row, ModelMapping $mapping, bool $truncateLongFields = true): ?Model
     {
         // Group attributes and relations
-        $grouped = $this->groupAttributesAndRelations($row, $mapping);
+        $grouped = $this->groupAttributesAndRelations($row, $mapping, $truncateLongFields);
         $attributes = $grouped['attributes'];
         $relations = $grouped['relations'];
         $this->truncatedFields = $grouped['truncatedFields'];
@@ -126,7 +127,7 @@ class EloquentLoader
     /**
      * Group column mappings into attributes and relations.
      */
-    private function groupAttributesAndRelations(Row $row, ModelMapping $mapping): array
+    private function groupAttributesAndRelations(Row $row, ModelMapping $mapping, bool $truncateLongFields = true): array
     {
         $attributes = [];
         $relations = [];
@@ -139,8 +140,8 @@ class EloquentLoader
             // Parse path (e.g., "address.street" -> ["address", "street"])
             $pathParts = explode('.', $columnMapping->targetPath);
 
-            // Validate and truncate string values that exceed column max length
-            if (count($pathParts) === 1 && is_string($transformedValue) && $transformedValue !== '') {
+            // Validate and truncate string values that exceed column max length (if enabled)
+            if ($truncateLongFields && count($pathParts) === 1 && is_string($transformedValue) && $transformedValue !== '') {
                 $validationResult = $this->validateAndTruncate(
                     $mapping->modelClass,
                     $pathParts[0],
