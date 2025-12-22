@@ -4,12 +4,16 @@ namespace InFlow\Presenters;
 
 use InFlow\Presenters\Contracts\PresenterInterface;
 use InFlow\ViewModels\ColumnMappingInfoViewModel;
+use InFlow\ViewModels\FileInfoViewModel;
 use InFlow\ViewModels\FlowRunViewModel;
 use InFlow\ViewModels\FormatInfoViewModel;
 use InFlow\ViewModels\MessageViewModel;
 use InFlow\ViewModels\PreviewViewModel;
+use InFlow\ViewModels\ProgressInfoViewModel;
 use InFlow\ViewModels\QualityReportViewModel;
 use InFlow\ViewModels\SchemaViewModel;
+use InFlow\ViewModels\StepProgressViewModel;
+use InFlow\ViewModels\StepSummaryViewModel;
 use InFlow\ViewModels\SummaryViewModel;
 
 /**
@@ -55,6 +59,27 @@ readonly class NullPresenter implements PresenterInterface
     }
 
     public function presentColumnMappingInfo(ColumnMappingInfoViewModel $viewModel): void
+    {
+        // No-op
+    }
+
+    public function presentStepProgress(StepProgressViewModel $viewModel): void
+    {
+        // No-op
+    }
+
+    public function presentFileInfo(FileInfoViewModel $viewModel): void
+    {
+        // No-op
+    }
+
+    public function presentStepSummary(StepSummaryViewModel $viewModel): bool
+    {
+        // Always continue in null presenter
+        return true;
+    }
+
+    public function presentProgressInfo(ProgressInfoViewModel $viewModel): void
     {
         // No-op
     }

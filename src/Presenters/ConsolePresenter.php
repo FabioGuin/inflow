@@ -7,12 +7,16 @@ use InFlow\Constants\DisplayConstants;
 use InFlow\Enums\UI\MessageType;
 use InFlow\Presenters\Contracts\PresenterInterface;
 use InFlow\ViewModels\ColumnMappingInfoViewModel;
+use InFlow\ViewModels\FileInfoViewModel;
 use InFlow\ViewModels\FlowRunViewModel;
 use InFlow\ViewModels\FormatInfoViewModel;
 use InFlow\ViewModels\MessageViewModel;
 use InFlow\ViewModels\PreviewViewModel;
+use InFlow\ViewModels\ProgressInfoViewModel;
 use InFlow\ViewModels\QualityReportViewModel;
 use InFlow\ViewModels\SchemaViewModel;
+use InFlow\ViewModels\StepProgressViewModel;
+use InFlow\ViewModels\StepSummaryViewModel;
 use InFlow\ViewModels\SummaryViewModel;
 
 /**
@@ -34,7 +38,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
         $this->command->newLine();
         $this->command->line('<fg=cyan>'.$viewModel->title.'</>');
-        $this->command->line('─────────────────────────────────────────────────────────');
+        $this->command->line(DisplayConstants::SECTION_SEPARATOR);
 
         $rows = [
             ['Type', $viewModel->type],
@@ -62,7 +66,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
         $this->command->newLine();
         $this->command->line('<fg=cyan>'.$viewModel->title.'</>');
-        $this->command->line('─────────────────────────────────────────────────────────');
+        $this->command->line(DisplayConstants::SECTION_SEPARATOR);
 
         $headers = ['Column', 'Type', 'Null %', 'Examples'];
         $tableData = [];
@@ -95,7 +99,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
         $this->command->newLine();
         $this->command->line('<fg=cyan>'.$viewModel->title.'</>');
-        $this->command->line('─────────────────────────────────────────────────────────');
+        $this->command->line(DisplayConstants::SECTION_SEPARATOR);
 
         if ($viewModel->headers !== null && ! empty($viewModel->headers)) {
             $tableData = [];
@@ -125,7 +129,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
         $this->command->newLine();
         $this->command->line('<fg=cyan>'.$viewModel->title.'</>');
-        $this->command->line('─────────────────────────────────────────────────────────');
+        $this->command->line(DisplayConstants::SECTION_SEPARATOR);
 
         if (! empty($viewModel->errors)) {
             $this->command->newLine();
@@ -154,7 +158,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
         $this->command->newLine();
         $this->command->line('<fg=cyan>'.$viewModel->title.'</>');
-        $this->command->line('─────────────────────────────────────────────────────────');
+        $this->command->line(DisplayConstants::SECTION_SEPARATOR);
 
         $statusIconColor = match ($viewModel->status) {
             'completed' => 'green',
@@ -273,5 +277,100 @@ readonly class ConsolePresenter implements PresenterInterface
         if (! empty($altParts)) {
             $this->command->line('  <fg=cyan>Alternatives:</> '.implode(' | ', $altParts));
         }
+    }
+
+    public function presentStepProgress(StepProgressViewModel $viewModel): void
+    {
+        if ($this->command->isQuiet()) {
+            return;
+        }
+
+        $this->command->infoLine(
+            '<fg=blue>Step '.$viewModel->currentStep.'/'.$viewModel->totalSteps.':</> '.
+            '<fg=gray>'.$viewModel->stepDescription.'</>'
+        );
+    }
+
+    public function presentFileInfo(FileInfoViewModel $viewModel): void
+    {
+        if ($this->command->isQuiet()) {
+            return;
+        }
+
+        $this->command->newLine();
+        $this->command->infoLine('File Information');
+        $this->command->line(DisplayConstants::SECTION_SEPARATOR);
+
+        $this->command->table(
+            ['Property', 'Value'],
+            [
+                ['Name', $viewModel->name],
+                ['Extension', $viewModel->extension ?: '<fg=gray>none</>'],
+                ['Size', $viewModel->size],
+                ['MIME Type', $viewModel->mimeType ?: '<fg=gray>unknown</>'],
+            ]
+        );
+        $this->command->newLine();
+    }
+
+    public function presentStepSummary(StepSummaryViewModel $viewModel): bool
+    {
+        if ($this->command->isQuiet() || $this->command->option('no-interaction')) {
+            return true;
+        }
+
+        if (! $viewModel->showContinuePrompt) {
+            return true;
+        }
+
+        $this->command->newLine();
+        $this->command->line('<fg=green>✓</> <fg=white;options=bold>'.$viewModel->stepName.' completed</>');
+
+        if (! empty($viewModel->summary)) {
+            foreach ($viewModel->summary as $label => $value) {
+                $this->command->line('  <fg=gray>'.$label.':</> <fg=white>'.$value.'</>');
+            }
+        }
+
+        $this->command->newLine();
+
+        $choice = \Laravel\Prompts\select(
+            label: '  Continue?',
+            options: [
+                'continue' => '▶ Continue to next step',
+                'cancel' => '✕ Cancel import',
+            ],
+            default: 'continue'
+        );
+
+        return $choice === 'continue';
+    }
+
+    public function presentProgressInfo(ProgressInfoViewModel $viewModel): void
+    {
+        if ($this->command->isQuiet()) {
+            return;
+        }
+
+        $parts = [];
+        if ($viewModel->lines !== null) {
+            $parts[] = '<fg=yellow>'.number_format($viewModel->lines).'</> lines';
+        }
+        if ($viewModel->bytes !== null) {
+            $parts[] = '<fg=yellow>'.number_format($viewModel->bytes).'</> bytes';
+        }
+        if ($viewModel->rows !== null) {
+            $parts[] = '<fg=yellow>'.number_format($viewModel->rows).'</> row(s)';
+        }
+        if ($viewModel->columns !== null) {
+            $parts[] = '<fg=yellow>'.number_format($viewModel->columns).'</> column(s)';
+        }
+
+        $info = '<fg=green>✓</> '.$viewModel->message;
+        if (! empty($parts)) {
+            $info .= ': '.implode(', ', $parts);
+        }
+
+        $this->command->infoLine($info);
     }
 }
