@@ -20,16 +20,6 @@ class DisplayConstants
     public const BACK_KEYWORD = '__back__';
 
     /**
-     * Maximum number of fields to display in mapping alternatives.
-     */
-    public const MAX_ALTERNATIVE_FIELDS = 10;
-
-    /**
-     * Maximum number of relations to display in mapping alternatives.
-     */
-    public const MAX_ALTERNATIVE_RELATIONS = 10;
-
-    /**
      * High confidence threshold for mapping suggestions (green).
      * Value is decimal (0.0 - 1.0), not percentage.
      */
