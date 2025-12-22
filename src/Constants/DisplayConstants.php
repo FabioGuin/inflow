@@ -12,7 +12,7 @@ class DisplayConstants
     /**
      * Section separator line.
      */
-    public const SECTION_SEPARATOR = '  ──────────────────────────────────────';
+    public const SECTION_SEPARATOR = '─────────────────────────────────────────────────────────';
 
     /**
      * Back command keyword for field handler prompts.
