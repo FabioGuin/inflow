@@ -50,6 +50,10 @@ class InFlowServiceProvider extends ServiceProvider
         $this->app->singleton(\InFlow\Services\Formatter\SummaryFormatter::class);
         $this->app->singleton(\InFlow\Services\Formatter\MessageFormatter::class);
         $this->app->singleton(\InFlow\Services\Formatter\ColumnMappingInfoFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\StepProgressFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\FileInfoFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\StepSummaryFormatter::class);
+        $this->app->singleton(\InFlow\Services\Formatter\ProgressInfoFormatter::class);
     }
 
     /**
