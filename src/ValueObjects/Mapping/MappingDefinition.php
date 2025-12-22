@@ -23,12 +23,14 @@ readonly class MappingDefinition
 {
     /**
      * @param  array<ModelMapping>  $mappings
+     * @param  array<string, mixed>|null  $flowConfig  Flow configuration from JSON (sanitizer, format, execution)
      */
     public function __construct(
         public array $mappings,
         public string $name = '',
         public ?string $description = null,
-        public ?SourceSchema $sourceSchema = null
+        public ?SourceSchema $sourceSchema = null,
+        public ?array $flowConfig = null
     ) {}
 
     /**
@@ -36,7 +38,7 @@ readonly class MappingDefinition
      */
     public function toArray(): array
     {
-        return [
+        $data = [
             'name' => $this->name,
             'description' => $this->description,
             'source_schema' => $this->sourceSchema?->toArray(),
@@ -45,6 +47,12 @@ readonly class MappingDefinition
                 $this->mappings
             ),
         ];
+
+        if ($this->flowConfig !== null) {
+            $data['flow_config'] = $this->flowConfig;
+        }
+
+        return $data;
     }
 
     /**
@@ -93,7 +101,8 @@ readonly class MappingDefinition
             ),
             name: $data['name'] ?? '',
             description: $data['description'] ?? null,
-            sourceSchema: $sourceSchema
+            sourceSchema: $sourceSchema,
+            flowConfig: $data['flow_config'] ?? null
         );
     }
 

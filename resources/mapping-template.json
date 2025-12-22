@@ -1,0 +1,285 @@
+{
+    "version": "1.0",
+    "name": "Complete Mapping Template",
+    "description": "Template completo per mapping InFlow ETL con tutte le opzioni disponibili",
+    "source_schema": {
+        "columns": {
+            "example_string_column": {
+                "name": "example_string_column",
+                "type": "string",
+                "null_count": 0,
+                "unique_count": 10,
+                "min": null,
+                "max": null,
+                "examples": [
+                    "Example Value 1",
+                    "Example Value 2"
+                ]
+            },
+            "example_email_column": {
+                "name": "example_email_column",
+                "type": "email",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "user@example.com"
+                ]
+            },
+            "example_numeric_column": {
+                "name": "example_numeric_column",
+                "type": "float",
+                "null_count": 0,
+                "unique_count": 10,
+                "min": 0.0,
+                "max": 9999.99,
+                "examples": [
+                    "19.99",
+                    "15.50"
+                ]
+            },
+            "example_decimal_column": {
+                "name": "example_decimal_column",
+                "type": "decimal",
+                "null_count": 0,
+                "unique_count": 10,
+                "min": 0.00,
+                "max": 9999.99,
+                "examples": [
+                    "19.99",
+                    "15.50",
+                    "100.00"
+                ]
+            },
+            "example_date_column": {
+                "name": "example_date_column",
+                "type": "date",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "2023-01-15",
+                    "2022-06-20"
+                ]
+            },
+            "example_timestamp_column": {
+                "name": "example_timestamp_column",
+                "type": "timestamp",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "2023-01-15 14:30:00",
+                    "2022-06-20 09:15:00"
+                ]
+            },
+            "example_time_column": {
+                "name": "example_time_column",
+                "type": "time",
+                "null_count": 0,
+                "unique_count": 10,
+                "examples": [
+                    "14:30:00",
+                    "09:15:00",
+                    "2:30 PM"
+                ]
+            },
+            "example_boolean_column": {
+                "name": "example_boolean_column",
+                "type": "bool",
+                "null_count": 0,
+                "unique_count": 2,
+                "examples": [
+                    "true",
+                    "false",
+                    "1",
+                    "0"
+                ]
+            },
+            "example_boolean_with_override": {
+                "name": "example_boolean_with_override",
+                "type": "bool",
+                "null_count": 0,
+                "unique_count": 2,
+                "examples": [
+                    "1",
+                    "0"
+                ],
+                "_comment": "Type override: questa colonna contiene solo '1'/'0' ma è forzata come bool nel source_schema"
+            },
+            "example_json_column": {
+                "name": "example_json_column",
+                "type": "json",
+                "null_count": 0,
+                "examples": [
+                    "[{\"key\": \"value\"}]",
+                    "{\"name\": \"John\", \"age\": 30}"
+                ]
+            },
+            "example_nested_column": {
+                "name": "example_nested_column",
+                "type": "string",
+                "null_count": 0,
+                "examples": [
+                    "nested.value"
+                ]
+            }
+        },
+        "total_rows": 100
+    },
+    "flow_config": {
+        "sanitizer": {
+            "enabled": true,
+            "remove_bom": true,
+            "normalize_newlines": true,
+            "remove_control_chars": true,
+            "newline_format": "lf"
+        },
+        "format": {
+            "type": "csv",
+            "delimiter": ",",
+            "quote_char": "\"",
+            "has_header": true,
+            "encoding": "UTF-8"
+        },
+        "execution": {
+            "chunk_size": 1000,
+            "error_policy": "continue",
+            "skip_empty_rows": true,
+            "truncate_long_fields": true,
+            "preview_rows": 5
+        }
+    },
+    "mappings": [
+        {
+            "model": "App\\Models\\ExampleModel",
+            "execution_order": 1,
+            "type": "model",
+            "columns": [
+                {
+                    "source": "example_string_column",
+                    "target": "name",
+                    "transforms": [
+                        "trim",
+                        "lower"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|min:2|max:100",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "example_email_column",
+                    "target": "email",
+                    "transforms": [
+                        "trim",
+                        "lower"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|email|unique:users,email",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "example_numeric_column",
+                    "target": "price",
+                    "transforms": [
+                        "trim",
+                        "cast:decimal:2"
+                    ],
+                    "default": 0.0,
+                    "validation_rule": "required|numeric|min:0|max:9999.99",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "example_date_column",
+                    "target": "published_at",
+                    "transforms": [
+                        "trim",
+                        "cast:date"
+                    ],
+                    "default": null,
+                    "validation_rule": "nullable|date|before_or_equal:today",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "example_boolean_column",
+                    "target": "is_active",
+                    "transforms": [
+                        "trim",
+                        "cast:bool"
+                    ],
+                    "default": false,
+                    "validation_rule": "boolean",
+                    "relation_lookup": null
+                },
+                {
+                    "source": "example_nested_column",
+                    "target": "relation.field",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": "nullable|string|max:255",
+                    "relation_lookup": {
+                        "field": "name",
+                        "create_if_missing": false
+                    }
+                },
+                {
+                    "source": "example_json_column",
+                    "target": "items.*.name",
+                    "transforms": [
+                        "trim",
+                        "json_decode"
+                    ],
+                    "default": null,
+                    "validation_rule": "nullable|array",
+                    "relation_lookup": {
+                        "field": "name",
+                        "create_if_missing": true
+                    }
+                }
+            ],
+            "options": {
+                "unique_key": "email",
+                "duplicate_strategy": "update"
+            }
+        },
+        {
+            "model": "App\\Models\\RelatedModel",
+            "execution_order": 2,
+            "type": "model",
+            "columns": [
+                {
+                    "source": "example_string_column",
+                    "target": "parent.email",
+                    "transforms": [
+                        "trim",
+                        "lower"
+                    ],
+                    "default": null,
+                    "validation_rule": null,
+                    "relation_lookup": {
+                        "field": "email",
+                        "create_if_missing": false
+                    }
+                },
+                {
+                    "source": "example_nested_column",
+                    "target": "field",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": "required|string|max:255",
+                    "relation_lookup": null
+                }
+            ],
+            "options": {
+                "unique_key": [
+                    "parent_id",
+                    "field"
+                ],
+                "duplicate_strategy": "skip"
+            }
+        }
+    ],
+    "created_at": "2025-12-18T00:00:00+00:00",
+    "updated_at": "2025-12-18T00:00:00+00:00"
+}
