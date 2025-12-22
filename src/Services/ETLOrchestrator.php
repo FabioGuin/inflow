@@ -649,8 +649,10 @@ readonly class ETLOrchestrator
                         $suggestedPath
                     );
                 },
-                transformCallback: function ($suggestedTransforms) {
-                    return $suggestedTransforms; // Simplified - just use suggested
+                transformCallback: function ($sourceColumn, $targetPath, $suggestedTransforms, $columnMeta = null, $targetType = null, $modelClass = null) {
+                    // Simplified - just use suggested transforms
+                    // Ensure we always return an array
+                    return is_array($suggestedTransforms) ? $suggestedTransforms : [];
                 }
             );
 
