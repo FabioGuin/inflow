@@ -23,12 +23,16 @@ use InFlow\Services\Core\FlowExecutionService;
 use InFlow\Services\DataProcessing\SanitizationService;
 use InFlow\Services\File\FileReaderService;
 use InFlow\Services\File\FileWriterService;
+use InFlow\Services\Formatter\FileInfoFormatter;
 use InFlow\Services\Formatter\FlowRunFormatter;
 use InFlow\Services\Formatter\FormatInfoFormatter;
 use InFlow\Services\Formatter\MessageFormatter;
 use InFlow\Services\Formatter\PreviewFormatter;
+use InFlow\Services\Formatter\ProgressInfoFormatter;
 use InFlow\Services\Formatter\QualityReportFormatter;
 use InFlow\Services\Formatter\SchemaFormatter;
+use InFlow\Services\Formatter\StepProgressFormatter;
+use InFlow\Services\Formatter\StepSummaryFormatter;
 use InFlow\Services\Loading\PivotSyncService;
 use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Services\Mapping\MappingGenerationService;
@@ -75,7 +79,11 @@ readonly class ETLOrchestrator
         private PreviewFormatter $previewFormatter,
         private QualityReportFormatter $qualityReportFormatter,
         private FlowRunFormatter $flowRunFormatter,
-        private MessageFormatter $messageFormatter
+        private MessageFormatter $messageFormatter,
+        private StepProgressFormatter $stepProgressFormatter,
+        private FileInfoFormatter $fileInfoFormatter,
+        private StepSummaryFormatter $stepSummaryFormatter,
+        private ProgressInfoFormatter $progressInfoFormatter
     ) {}
 
     /**
@@ -95,7 +103,7 @@ readonly class ETLOrchestrator
         }
 
         // Step 2: Read content
-        $context = $this->readContent($command, $context);
+        $context = $this->readContent($command, $context, $presenter);
         if ($context->cancelled || $context->content === null) {
             return $context;
         }
@@ -138,19 +146,19 @@ readonly class ETLOrchestrator
      */
     private function loadFile(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
-        $command->infoLine('<fg=blue>Step 1/8:</> <fg=gray>Loading file...</>');
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(1, 8, 'Loading file...'));
 
         try {
             $source = FileSource::fromPath($context->filePath);
             $context = $context->withSource($source);
 
             $presenter->presentMessage($this->messageFormatter->success('File loaded successfully'));
-            $this->displayFileInfo($command, $source);
+            $presenter->presentFileInfo($this->fileInfoFormatter->format($source));
 
-            if ($this->shouldContinue($command, 'File loaded', [
+            if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('File loaded', [
                 'Name' => $source->getName(),
                 'Size' => $this->fileWriter->formatSize($source->getSize()),
-            ])) {
+            ]))) {
                 return $context;
             }
 
@@ -164,13 +172,13 @@ readonly class ETLOrchestrator
     /**
      * Step 2: Read file content.
      */
-    private function readContent(InFlowCommand $command, ProcessingContext $context): ProcessingContext
+    private function readContent(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
         if ($context->source === null) {
             return $context;
         }
 
-        $command->infoLine('<fg=blue>Step 2/8:</> <fg=gray>Reading file content...</>');
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(2, 8, 'Reading file content...'));
 
         $content = $this->readFileContent($command, $context->source);
         $lineCount = $this->countLines($content);
@@ -179,12 +187,16 @@ readonly class ETLOrchestrator
             ->withContent($content)
             ->withLineCount($lineCount);
 
-        $command->infoLine('<fg=green>✓ Content read:</> <fg=yellow>'.number_format($lineCount).'</> lines, <fg=yellow>'.number_format(strlen($content)).'</> bytes');
+        $presenter->presentProgressInfo($this->progressInfoFormatter->format(
+            'Content read',
+            lines: $lineCount,
+            bytes: strlen($content)
+        ));
 
-        if ($this->shouldContinue($command, 'Content read', [
+        if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Content read', [
             'Lines' => number_format($lineCount),
             'Bytes' => number_format(strlen($content)),
-        ])) {
+        ]))) {
             return $context;
         }
 
@@ -203,16 +215,16 @@ readonly class ETLOrchestrator
         $shouldSanitize = $this->determineShouldSanitize($command, $context);
 
         if ($shouldSanitize) {
-            $command->infoLine('<fg=blue>Step 3/8:</> <fg=gray>Sanitizing content...</>');
-            $command->note('Cleaning file: removing BOM, normalizing newlines, removing control characters.');
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(3, 8, 'Sanitizing content...'));
+            $presenter->presentMessage($this->messageFormatter->info('Cleaning file: removing BOM, normalizing newlines, removing control characters.'));
 
             $lineCount = $context->lineCount ?? 0;
             $sanitizerConfig = $this->getSanitizerConfig($command);
             [$sanitized] = $this->sanitizationService->sanitize($context->content, $sanitizerConfig);
             $newLineCount = $this->countLines($sanitized);
 
-            if ($newLineCount !== $lineCount && ! $command->isQuiet()) {
-                $command->note("Line count changed: {$lineCount} → {$newLineCount} (normalization effect)", 'warning');
+            if ($newLineCount !== $lineCount) {
+                $presenter->presentMessage($this->messageFormatter->warning("Line count changed: {$lineCount} → {$newLineCount} (normalization effect)"));
             }
 
             $context = $context
@@ -221,12 +233,11 @@ readonly class ETLOrchestrator
                 ->withShouldSanitize(true);
 
             $presenter->presentMessage($this->messageFormatter->success('Sanitization completed'));
-            // Sanitization report display removed (was empty)
 
-            if ($this->shouldContinue($command, 'Sanitization', [
+            if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Sanitization', [
                 'Lines' => (string) $newLineCount,
                 'Status' => 'cleaned',
-            ])) {
+            ]))) {
                 return $context;
             }
 
@@ -247,8 +258,8 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        $command->infoLine('<fg=blue>Step 4/8:</> <fg=gray>Detecting file format...</>');
-        $command->note('Analyzing file structure to detect format, delimiter, encoding, and header presence.');
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(4, 8, 'Detecting file format...'));
+        $presenter->presentMessage($this->messageFormatter->info('Analyzing file structure to detect format, delimiter, encoding, and header presence.'));
 
         $format = $this->formatDetector->detect($context->source);
         $context = $context->withFormat($format);
@@ -256,7 +267,7 @@ readonly class ETLOrchestrator
         $presenter->presentMessage($this->messageFormatter->success('Format detected successfully'));
         $presenter->presentFormatInfo($this->formatInfoFormatter->format($format));
 
-        if ($this->shouldContinue($command, 'Format detected: '.$format->type->value)) {
+        if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Format detected: '.$format->type->value, []))) {
             return $context;
         }
 
@@ -275,16 +286,16 @@ readonly class ETLOrchestrator
         $reader = null;
 
         if ($context->format->type->isCsv()) {
-            $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading CSV data...</>');
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading CSV data...'));
             $reader = $this->readCsvData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isExcel()) {
-            $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading Excel data...</>');
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading Excel data...'));
             $reader = $this->readExcelData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isJson()) {
-            $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading JSON Lines data...</>');
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading JSON Lines data...'));
             $reader = $this->readJsonData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isXml()) {
-            $command->infoLine('<fg=blue>Step 5/8:</> <fg=gray>Reading XML data...</>');
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading XML data...'));
             $reader = $this->readXmlData($command, $context->source, $context->format, $presenter);
         } else {
             $presenter->presentMessage($this->messageFormatter->warning('Data reading skipped (unsupported file type: '.$context->format->type->value.')'));
@@ -294,9 +305,7 @@ readonly class ETLOrchestrator
             $context = $context->withReader($reader);
         }
 
-        $command->newLine();
-
-        if ($this->shouldContinue($command, 'Data read completed')) {
+        if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Data read completed', []))) {
             return $context;
         }
 
@@ -310,13 +319,12 @@ readonly class ETLOrchestrator
     {
         if ($context->reader === null) {
             $presenter->presentMessage($this->messageFormatter->warning('Profiling skipped (no data reader available)'));
-            $command->newLine();
 
             return $context;
         }
 
-        $command->infoLine('<fg=blue>Step 6/8:</> <fg=gray>Profiling data quality...</>');
-        $command->note('Analyzing data structure, types, and quality issues. This helps identify problems before import.');
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(6, 8, 'Profiling data quality...'));
+        $presenter->presentMessage($this->messageFormatter->info('Analyzing data structure, types, and quality issues. This helps identify problems before import.'));
 
         $context->reader->rewind();
         $result = $this->profiler->profile($context->reader);
@@ -326,17 +334,20 @@ readonly class ETLOrchestrator
         $context = $context->withSourceSchema($schema);
 
         $presenter->presentMessage($this->messageFormatter->success('Profiling completed'));
-        $command->infoLine('  <fg=gray>→</> Analyzed <fg=yellow>'.number_format($schema->totalRows).'</> row(s)');
-        $command->infoLine('  <fg=gray>→</> Detected <fg=yellow>'.count($schema->columns).'</> column(s)');
+        $presenter->presentProgressInfo($this->progressInfoFormatter->format(
+            'Analyzed',
+            rows: $schema->totalRows,
+            columns: count($schema->columns)
+        ));
 
         $presenter->presentSchema($this->schemaFormatter->format($schema));
         $presenter->presentQualityReport($this->qualityReportFormatter->format($qualityReport));
 
-        if ($this->shouldContinue($command, 'Data profiling', [
+        if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Data profiling', [
             'Rows analyzed' => number_format($schema->totalRows),
             'Columns detected' => (string) count($schema->columns),
             'Quality issues' => $qualityReport->hasIssues() ? 'Yes (see above)' : 'None',
-        ])) {
+        ]))) {
             return $context;
         }
 
@@ -350,12 +361,11 @@ readonly class ETLOrchestrator
     {
         if ($context->reader === null || $context->sourceSchema === null) {
             $presenter->presentMessage($this->messageFormatter->warning('Mapping skipped (no schema available)'));
-            $command->newLine();
 
             return $context;
         }
 
-        $command->infoLine('<fg=blue>Step 7/8:</> <fg=gray>Processing mapping...</>');
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(7, 8, 'Processing mapping...'));
 
         $mappingDefinition = $this->loadOrGenerateMapping($command, $context->sourceSchema, $presenter);
 
@@ -380,11 +390,11 @@ readonly class ETLOrchestrator
             }
         }
 
-        if ($this->shouldContinue($command, 'Mapping configuration', [
+        if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Mapping configuration', [
             'Model' => class_basename($modelClass),
             'Direct fields' => (string) $columnCount,
             'Relation fields' => (string) $relationCount,
-        ])) {
+        ]))) {
             return $context;
         }
 
@@ -402,8 +412,8 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        $command->infoLine('<fg=blue>Step 8/8:</> <fg=gray>Executing ETL flow...</>');
-        $command->note('Importing data into database. Rows are processed in chunks for optimal performance.');
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(8, 8, 'Executing ETL flow...'));
+        $presenter->presentMessage($this->messageFormatter->info('Importing data into database. Rows are processed in chunks for optimal performance.'));
 
         $shouldSanitize = $context->shouldSanitize ?? true;
         $sanitizerConfig = $this->getSanitizerConfig($command);
@@ -509,7 +519,7 @@ readonly class ETLOrchestrator
         $rows = $previewData['rows'];
         $rowCount = $previewData['count'];
 
-        $command->infoLine('<fg=green>✓ Read</> <fg=yellow>'.$rowCount.'</> row(s)');
+        $presenter->presentProgressInfo($this->progressInfoFormatter->format('Read', rows: $rowCount));
 
         if (! empty($rows) && ! $command->isQuiet()) {
             $presenter->presentPreview($this->previewFormatter->format($reader, $rows, $previewRows));
@@ -518,62 +528,7 @@ readonly class ETLOrchestrator
         return $reader;
     }
 
-    // Helper methods for display/formatting (consolidated from formatter services)
-
-    private function displayFileInfo(InFlowCommand $command, FileSource $source): void
-    {
-        if ($command->isQuiet()) {
-            return;
-        }
-
-        $command->newLine();
-        $command->infoLine('File Information');
-        $command->line('─────────────────────────────────────────────────────────');
-
-        $sizeFormatted = $this->fileWriter->formatSize($source->getSize());
-
-        $command->table(
-            ['Property', 'Value'],
-            [
-                ['Name', $source->getName()],
-                ['Extension', $source->getExtension() ?: '<fg=gray>none</>'],
-                ['Size', $sizeFormatted],
-                ['MIME Type', $source->getMimeType() ?: '<fg=gray>unknown</>'],
-            ]
-        );
-        $command->newLine();
-    }
-
     // Helper methods for configuration and decisions
-
-    private function shouldContinue(InFlowCommand $command, string $stepName, array $summary = []): bool
-    {
-        if ($command->isQuiet() || $command->option('no-interaction')) {
-            return true;
-        }
-
-        $command->newLine();
-        $command->line('<fg=green>✓</> <fg=white;options=bold>'.$stepName.' completed</>');
-
-        if (! empty($summary)) {
-            foreach ($summary as $label => $value) {
-                $command->line('  <fg=gray>'.$label.':</> <fg=white>'.$value.'</>');
-            }
-        }
-
-        $command->newLine();
-
-        $choice = \Laravel\Prompts\select(
-            label: '  Continue?',
-            options: [
-                'continue' => '▶ Continue to next step',
-                'cancel' => '✕ Cancel import',
-            ],
-            default: 'continue'
-        );
-
-        return $choice === 'continue';
-    }
 
     private function determineShouldSanitize(InFlowCommand $command, ProcessingContext $context): bool
     {
@@ -641,7 +596,7 @@ readonly class ETLOrchestrator
         if ($mappingPath !== null) {
             try {
                 $mapping = $this->mappingSerializer->loadFromFile($mappingPath);
-                $command->infoLine('<fg=green>✓ Mapping loaded from:</> <fg=yellow>'.$mappingPath.'</>');
+                $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapping loaded from: '.$mappingPath));
 
                 return $mapping;
             } catch (\Exception $e) {
@@ -655,13 +610,13 @@ readonly class ETLOrchestrator
         // Try to find existing mapping
         $existingMappingPath = $this->configResolver->findMappingForModel($modelClass);
         if ($existingMappingPath !== null && ! $command->isQuiet() && ! $command->option('no-interaction')) {
-            $command->line('<fg=cyan>Found existing mapping:</> <fg=yellow>'.$existingMappingPath.'</>');
+            $presenter->presentMessage($this->messageFormatter->info('Found existing mapping: '.$existingMappingPath));
             $useExisting = \Laravel\Prompts\confirm(label: '  Use existing mapping?', default: false, yes: 'y', no: 'n');
 
             if ($useExisting) {
                 try {
                     $mapping = $this->mappingSerializer->loadFromFile($existingMappingPath);
-                    $command->infoLine('<fg=green>✓ Mapping loaded from:</> <fg=yellow>'.$existingMappingPath.'</> (auto-detected)');
+                    $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapping loaded from: '.$existingMappingPath.' (auto-detected)'));
 
                     return $mapping;
                 } catch (\Exception $e) {
@@ -692,7 +647,7 @@ readonly class ETLOrchestrator
 
             $presenter->presentMessage($this->messageFormatter->success('Mapping generated successfully'));
             $columnCount = count($mapping->mappings[0]->columns ?? []);
-            $command->infoLine('  <fg=gray>→</> <fg=yellow>'.$columnCount.'</> column(s) mapped');
+            $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapped', columns: $columnCount));
 
             // Save mapping
             $saveMappingPath = $this->mappingGenerationService->getMappingSavePath($modelClass);
@@ -707,7 +662,7 @@ readonly class ETLOrchestrator
             );
 
             $this->mappingGenerationService->saveMapping($mapping, $saveMappingPath);
-            $command->infoLine('  <fg=gray>→</> Mapping saved to: <fg=yellow>'.$saveMappingPath.'</>');
+            $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapping saved to: '.$saveMappingPath));
 
             return $mapping;
         } catch (\Exception $e) {
