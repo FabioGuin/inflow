@@ -13,9 +13,8 @@ trait HandlesProcessingLifecycle
     /**
      * Create the initial processing context for the ETL pipeline.
      *
-     * Initializes a new ProcessingContext with the file path, start time for duration
-     * calculation, and any guided configuration from the setup wizard. This context
-     * is passed through the entire processing pipeline.
+     * Initializes a new ProcessingContext with the file path and start time for duration
+     * calculation. This context is passed through the entire processing pipeline.
      *
      * @param  string  $filePath  The source file path to process
      * @param  float  $startTime  The start time in microseconds (from microtime(true))
@@ -25,8 +24,7 @@ trait HandlesProcessingLifecycle
     {
         return new ProcessingContext(
             filePath: $filePath,
-            startTime: $startTime,
-            guidedConfig: $this->guidedConfig
+            startTime: $startTime
         );
     }
 

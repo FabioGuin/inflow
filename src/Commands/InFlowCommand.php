@@ -4,14 +4,9 @@ namespace InFlow\Commands;
 
 use Illuminate\Console\Command;
 // Core Traits
-use InFlow\Commands\Interactions\GuidedSetupInteraction;
 use InFlow\Commands\Traits\Core\HandlesExceptions;
-use InFlow\Commands\Traits\Core\HandlesFirstTimeSetup;
 use InFlow\Commands\Traits\Core\HandlesOutput;
 use InFlow\Commands\Traits\Core\HandlesProcessingLifecycle;
-use InFlow\Commands\Traits\Core\HandlesUtility;
-// Data Processing Traits
-use InFlow\Commands\Traits\DataProcessing\HandlesSanitization;
 use InFlow\Commands\Traits\File\HandlesFileSelection;
 use InFlow\Presenters\ConsolePresenter;
 use InFlow\Services\Core\ConfigurationResolver;
@@ -25,11 +20,8 @@ class InFlowCommand extends Command
 {
     use HandlesExceptions;
     use HandlesFileSelection;
-    use HandlesFirstTimeSetup;
     use HandlesOutput;
     use HandlesProcessingLifecycle;
-    use HandlesSanitization;
-    use HandlesUtility;
 
     /**
      * Create a new command instance.
@@ -54,7 +46,7 @@ class InFlowCommand extends Command
     protected $signature = 'inflow:process
                             {from? : Source file path (CSV/Excel) - will prompt if not provided}
                             {to? : Target model class (FQCN, e.g., App\\\\Models\\\\User) - will prompt if not provided}
-                            {--sanitize= : Apply sanitization to the file (1/0, true/false, y/n - default: yes, will prompt if not specified)}
+                            {--sanitize= : Apply sanitization to the file (1/0, true/false, y/n - default: from config)}
                             {--newline-format= : Newline format - options: lf, crlf, cr (default: lf)}
                             {--preview= : Number of rows to preview (default: 5)}
                             {--mapping= : Path to mapping definition file (JSON) - auto-detected if not provided}
@@ -68,23 +60,6 @@ class InFlowCommand extends Command
     protected $description = 'Process a file through InFlow ETL engine';
 
     /**
-     * Configuration from guided setup
-     *
-     * @var array<string, mixed>
-     */
-    private array $guidedConfig = [];
-
-    /**
-     * Guided setup wizard delegate (used by HandlesFirstTimeSetup).
-     *
-     * @return array<string, mixed>
-     */
-    private function guidedSetup(): array
-    {
-        return (new GuidedSetupInteraction($this))->guidedSetup();
-    }
-
-    /**
      * Execute the console command.
      */
     public function handle(): int
@@ -93,8 +68,6 @@ class InFlowCommand extends Command
 
         try {
             $this->note('Starting InFlow processing...');
-
-            $this->runFirstTimeSetupIfNeeded();
 
             $filePath = $this->requireFilePath();
             $context = $this->createProcessingContext($filePath, $startTime);

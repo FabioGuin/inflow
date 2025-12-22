@@ -19,7 +19,7 @@ use InFlow\ValueObjects\Mapping\MappingDefinition;
  * - File metadata (path, source, content, line count)
  * - Processing decisions (should sanitize, format detected)
  * - Pipeline results (reader, schema, mapping, flow run)
- * - Configuration and state (guided config, cancellation status)
+ * - State (cancellation status)
  */
 class ProcessingContext
 {
@@ -35,7 +35,6 @@ class ProcessingContext
      * @param  MappingDefinition|null  $mappingDefinition  Mapping configuration
      * @param  FlowRun|null  $flowRun  Flow execution result
      * @param  float|null  $startTime  Processing start timestamp (microtime)
-     * @param  array  $guidedConfig  Configuration from interactive wizard
      * @param  bool  $cancelled  Whether processing was cancelled by user
      */
     public function __construct(
@@ -50,7 +49,6 @@ class ProcessingContext
         public ?MappingDefinition $mappingDefinition = null,
         public ?FlowRun $flowRun = null,
         public ?float $startTime = null,
-        public array $guidedConfig = [],
         public bool $cancelled = false,
     ) {}
 
@@ -190,20 +188,6 @@ class ProcessingContext
     {
         $new = clone $this;
         $new->startTime = $startTime;
-
-        return $new;
-    }
-
-    /**
-     * Create a new instance with updated guided configuration.
-     *
-     * @param  array  $guidedConfig  Configuration from interactive wizard
-     * @return self New instance with updated guided config
-     */
-    public function withGuidedConfig(array $guidedConfig): self
-    {
-        $new = clone $this;
-        $new->guidedConfig = $guidedConfig;
 
         return $new;
     }
