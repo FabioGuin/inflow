@@ -632,11 +632,20 @@ readonly class ETLOrchestrator
             $mapping = $this->mappingBuilder->autoMapInteractive(
                 schema: $sourceSchema,
                 modelClass: $modelClass,
-                interactiveCallback: function ($sourceColumn, $suggestedPath, $alternatives) use ($command) {
+                interactiveCallback: function ($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation = false, $isArrayRelation = false, $columnMeta = null) use ($command) {
                     // Simplified mapping interaction - delegate to command if needed
+                    if (! is_array($alternatives)) {
+                        $alternatives = [];
+                    }
+
+                    $options = [$suggestedPath => $suggestedPath];
+                    foreach ($alternatives as $alt) {
+                        $options[$alt] = $alt;
+                    }
+
                     return $command->choice(
                         "Map '{$sourceColumn}' to:",
-                        array_merge([$suggestedPath => $suggestedPath], array_combine($alternatives, $alternatives)),
+                        $options,
                         $suggestedPath
                     );
                 },
