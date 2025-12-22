@@ -32,8 +32,7 @@ class JsonLinesReader implements ReaderInterface
     private bool $isJsonArray = false;
 
     public function __construct(
-        private readonly FileSource $source,
-        private readonly DetectedFormat $format
+        private readonly FileSource $source
     ) {
         $this->stream = $source->stream();
     }

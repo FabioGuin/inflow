@@ -102,7 +102,7 @@ readonly class FlowExecutionService
         } elseif ($format->type->isExcel()) {
             return new ExcelReader($source, $format);
         } elseif ($format->type->isJson()) {
-            return new JsonLinesReader($source, $format);
+            return new JsonLinesReader($source);
         } elseif ($format->type->isXml()) {
             return new XmlReader($source);
         }
