@@ -38,7 +38,7 @@ class TransformEngineTest extends TestCase
 
     public function test_it_applies_pipeline(): void
     {
-        $result = $this->engine->applyPipeline('  HELLO  ', 'trim|lower');
+        $result = $this->engine->apply('  HELLO  ', explode('|', 'trim|lower'));
 
         $this->assertEquals('hello', $result);
     }

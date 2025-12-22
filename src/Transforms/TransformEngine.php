@@ -59,7 +59,7 @@ use InFlow\Transforms\Utility\SplitTransform;
  * ```php
  * $engine = new TransformEngine();
  * $result = $engine->apply('  HELLO  ', ['trim', 'lower']);  // Returns: "hello"
- * $result = $engine->applyPipeline('123', 'trim|cast:int');  // Returns: 123
+ * $result = $engine->apply('123', explode('|', 'trim|cast:int'));  // Returns: 123
  * ```
  */
 class TransformEngine
@@ -110,17 +110,6 @@ class TransformEngine
         return $result;
     }
 
-    /**
-     * Apply transformations from a pipe-separated string (e.g., "trim|lower")
-     *
-     * @param  array<string, mixed>  $context
-     */
-    public function applyPipeline(mixed $value, string $pipeline, array $context = []): mixed
-    {
-        $specs = explode('|', $pipeline);
-
-        return $this->apply($value, $specs, $context);
-    }
 
     /**
      * Resolve a transform specification to a TransformStepInterface instance
