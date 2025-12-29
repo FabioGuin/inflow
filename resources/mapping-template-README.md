@@ -232,9 +232,11 @@ Descrive la struttura dei dati sorgente. Il campo `type` può essere usato per *
 Configurazione del flusso ETL (opzionale).
 
 **Principio di Priorità:**
-- **JSON come fonte di verità**: Se il file JSON del mapping esiste e contiene `flow_config`, questi valori hanno priorità assoluta e vengono usati per l'esecuzione.
-- **Config come fonte di verità (wizard manuale)**: Quando crei un mapping per la prima volta tramite wizard manuale (CLI, MCP, ecc.) e il file JSON non esiste ancora, i valori dal file `config/inflow.php` vengono usati come default. Questo evita di dover definire ogni opzione manualmente durante la configurazione iniziale.
-- **Fallback**: Se un valore specifico manca nel JSON ma il JSON esiste, viene usato il valore dal config come fallback.
+- **Command option (--sanitize)**: Se passato esplicitamente, ha priorità assoluta (override)
+- **JSON come fonte di verità**: Se il file JSON del mapping esiste e contiene `flow_config`, questi valori vengono usati per l'esecuzione
+- **Config come fallback**: Se un valore specifico manca nel JSON, viene usato il valore dal config come fallback
+
+**Nota per processi ricorrenti**: Per sanitizzare ogni volta in processi ricorrenti (cron, automazioni), aggiungi `sanitizer.enabled: true` nel `flow_config` del mapping. In alternativa, usa `--sanitize` nel comando.
 
 **Esempio pratico:**
 1. **Prima volta (wizard)**: Non hai ancora `mappings/App_Models_User.json` → usa `config/inflow.php` come default

@@ -35,6 +35,10 @@ use InFlow\Services\Formatter\StepProgressFormatter;
 use InFlow\Services\Formatter\StepSummaryFormatter;
 use InFlow\Services\Loading\PivotSyncService;
 use InFlow\Sources\FileSource;
+use InFlow\Enums\Data\ColumnType;
+use InFlow\Enums\File\FileType;
+use InFlow\ValueObjects\Data\ColumnMetadata;
+use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
 use InFlow\ValueObjects\Flow\ProcessingContext;
@@ -87,26 +91,34 @@ readonly class ETLOrchestrator
      */
     public function process(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
+        $hasMapping = $context->mappingDefinition !== null;
+        $flowConfig = $hasMapping ? ($context->mappingDefinition['flow_config'] ?? null) : null;
+
         // Step 1: Load file
         $context = $this->loadFile($context, $presenter);
         if ($context->cancelled || $context->source === null) {
             return $context;
         }
 
-        // Step 2: Read content
-        $context = $this->readContent($command, $context, $presenter);
-        if ($context->cancelled || $context->content === null) {
-            return $context;
+        // Step 2: Read content (only if sanitization needed)
+        $shouldSanitize = $this->shouldSanitize($command, $flowConfig);
+        if ($shouldSanitize) {
+            $context = $this->readContent($command, $context, $presenter);
+            if ($context->cancelled || $context->content === null) {
+                return $context;
+            }
         }
 
-        // Step 3: Sanitize (if needed)
-        $context = $this->sanitize($command, $context, $presenter);
-        if ($context->cancelled) {
-            return $context;
+        // Step 3: Sanitize (if needed and not already configured in mapping)
+        if ($shouldSanitize) {
+            $context = $this->sanitize($command, $context, $presenter, $flowConfig);
+            if ($context->cancelled) {
+                return $context;
+            }
         }
 
-        // Step 4: Detect format
-        $context = $this->detectFormat($context, $presenter);
+        // Step 4: Detect format (or use from mapping)
+        $context = $this->detectFormat($context, $presenter, $flowConfig);
         if ($context->cancelled || $context->format === null) {
             return $context;
         }
@@ -117,8 +129,11 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        // Step 6: Profile data
+        // Step 6: Profile data (skip if source_schema in mapping)
         $context = $this->profileData($context, $presenter);
+        if ($context->cancelled) {
+            return $context;
+        }
 
         // Step 7: Process mapping - TODO: Re-implement mapping system
         $context = $this->processMapping($command, $context, $presenter);
@@ -195,24 +210,56 @@ readonly class ETLOrchestrator
     }
 
     /**
+     * Determine if sanitization should be performed.
+     *
+     * Priority:
+     * 1. Command option (--sanitize) - explicit override
+     * 2. Mapping flow_config.sanitizer.enabled - for recurring processes
+     * 3. Config file - fallback
+     */
+    private function shouldSanitize(InFlowCommand $command, ?array $flowConfig): bool
+    {
+        // Priority 1: Command option (explicit override)
+        $sanitizeOption = $command->option('sanitize');
+        $wasSanitizePassed = $command->hasParameterOption('--sanitize', true);
+        if ($wasSanitizePassed) {
+            return $this->parseBooleanValue($sanitizeOption);
+        }
+
+        // Priority 2: Mapping flow_config (for recurring processes)
+        if ($flowConfig !== null && isset($flowConfig['sanitizer'])) {
+            return $flowConfig['sanitizer']['enabled'] ?? false;
+        }
+
+        // Priority 3: Config file (fallback)
+        return $this->determineShouldSanitize($command);
+    }
+
+    /**
      * Step 3: Sanitize content if needed.
      */
-    private function sanitize(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
+    private function sanitize(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter, ?array $flowConfig = null): ProcessingContext
     {
         if ($context->content === null) {
             return $context;
         }
 
-        $shouldSanitize = $this->determineShouldSanitize($command);
+        $shouldSanitize = $this->shouldSanitize($command, $flowConfig);
 
         if ($shouldSanitize) {
             $presenter->presentStepProgress($this->stepProgressFormatter->format(3, 8, 'Sanitizing content...'));
             $presenter->presentMessage($this->messageFormatter->format('Cleaning file: removing BOM, normalizing newlines, removing control characters.', MessageType::Info));
 
             $lineCount = $context->lineCount ?? 0;
-            $sanitizerConfig = $this->configResolver->buildSanitizerConfig(
-                fn (string $key) => $command->option($key)
-            );
+
+            // Use sanitizer config from flow_config if available, otherwise from command/config
+            if ($flowConfig !== null && isset($flowConfig['sanitizer'])) {
+                $sanitizerConfig = $this->normalizeSanitizerConfigFromJson($flowConfig['sanitizer']);
+            } else {
+                $sanitizerConfig = $this->configResolver->buildSanitizerConfig(
+                    fn (string $key) => $command->option($key)
+                );
+            }
             [$sanitized] = $this->sanitizationService->sanitize($context->content, $sanitizerConfig);
             $newLineCount = $this->countLines($sanitized);
 
@@ -243,14 +290,27 @@ readonly class ETLOrchestrator
     }
 
     /**
-     * Step 4: Detect file format.
+     * Step 4: Detect file format (or use from mapping).
      */
-    private function detectFormat(ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
+    private function detectFormat(ProcessingContext $context, PresenterInterface $presenter, ?array $flowConfig = null): ProcessingContext
     {
         if ($context->source === null) {
             return $context;
         }
 
+        // If flow_config has format config, use it instead of detecting
+        if ($flowConfig !== null && isset($flowConfig['format'])) {
+            $formatConfig = $flowConfig['format'];
+            $presenter->presentMessage($this->messageFormatter->format('Using format configuration from mapping file', MessageType::Info));
+
+            // Create DetectedFormat from flow_config
+            $format = $this->createFormatFromConfig($formatConfig, $context->source);
+            if ($format !== null) {
+                return $context->withFormat($format);
+            }
+        }
+
+        // Otherwise, detect format
         $presenter->presentStepProgress($this->stepProgressFormatter->format(4, 8, 'Detecting file format...'));
         $presenter->presentMessage($this->messageFormatter->format('Analyzing file structure to detect format, delimiter, encoding, and header presence.', MessageType::Info));
 
@@ -315,21 +375,25 @@ readonly class ETLOrchestrator
         // If mapping exists and has source_schema, use it instead of profiling
         if ($context->mappingDefinition !== null && isset($context->mappingDefinition['source_schema'])) {
             $presenter->presentMessage($this->messageFormatter->format('Using source_schema from mapping file (profiling skipped)', MessageType::Info));
-            // TODO: Convert mapping source_schema to SourceSchema value object
-            // For now, we still need to profile if we need SourceSchema object
-            // This is a temporary solution until we implement proper mapping loading
+
+            $schema = $this->convertSourceSchemaFromMapping($context->mappingDefinition['source_schema']);
+            if ($schema !== null) {
+                $context = $context->withSourceSchema($schema);
+                $presenter->presentProgressInfo($this->progressInfoFormatter->format(
+                    'Loaded from mapping',
+                    rows: $schema->totalRows,
+                    columns: count($schema->columns)
+                ));
+
+                return $context;
+            }
         }
 
+        // No mapping or no source_schema in mapping - profile the data
         if ($context->reader === null) {
             $presenter->presentMessage($this->messageFormatter->format('Profiling skipped (no data reader available)', MessageType::Warning));
 
             return $context;
-        }
-
-        // Only profile if we don't have source_schema from mapping
-        if ($context->mappingDefinition !== null && isset($context->mappingDefinition['source_schema'])) {
-            // TODO: Load source_schema from mapping instead of profiling
-            // For now, we still profile to get SourceSchema object
         }
 
         $presenter->presentStepProgress($this->stepProgressFormatter->format(6, 8, 'Profiling data quality...'));
@@ -544,6 +608,61 @@ readonly class ETLOrchestrator
         }
 
         return $reader;
+    }
+
+    /**
+     * Create DetectedFormat from flow_config format configuration.
+     */
+    private function createFormatFromConfig(array $formatConfig, FileSource $source): ?DetectedFormat
+    {
+        try {
+            $type = FileType::tryFrom($formatConfig['type'] ?? '');
+            if ($type === null) {
+                return null;
+            }
+
+            return new DetectedFormat(
+                type: $type,
+                delimiter: $formatConfig['delimiter'] ?? null,
+                quoteChar: $formatConfig['quote_char'] ?? null,
+                hasHeader: $formatConfig['has_header'] ?? true,
+                encoding: $formatConfig['encoding'] ?? 'UTF-8'
+            );
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Convert source_schema from mapping JSON to SourceSchema value object.
+     */
+    private function convertSourceSchemaFromMapping(array $sourceSchemaData): ?SourceSchema
+    {
+        try {
+            $columns = [];
+            $totalRows = $sourceSchemaData['total_rows'] ?? 0;
+
+            foreach ($sourceSchemaData['columns'] ?? [] as $columnName => $columnData) {
+                $type = ColumnType::tryFrom($columnData['type'] ?? 'string') ?? ColumnType::String;
+
+                $columns[$columnName] = new ColumnMetadata(
+                    name: $columnData['name'] ?? $columnName,
+                    type: $type,
+                    nullCount: $columnData['null_count'] ?? 0,
+                    uniqueCount: $columnData['unique_count'] ?? 0,
+                    min: $columnData['min'] ?? null,
+                    max: $columnData['max'] ?? null,
+                    examples: $columnData['examples'] ?? []
+                );
+            }
+
+            return new SourceSchema(
+                columns: $columns,
+                totalRows: $totalRows
+            );
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     // Helper methods for configuration and decisions

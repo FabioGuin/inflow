@@ -3,8 +3,11 @@
 namespace InFlow\Commands;
 
 use Illuminate\Console\Command;
+use InFlow\Commands\Interactions\MappingInteraction;
 use InFlow\Commands\Traits\Core\HandlesOutput;
 use InFlow\Presenters\ConsolePresenter;
+use InFlow\Services\File\ModelSelectionService;
+use InFlow\Services\Loading\RelationTypeService;
 use InFlow\Services\Mapping\MappingOrchestrator;
 use InFlow\ValueObjects\Mapping\MappingContext;
 
@@ -21,12 +24,15 @@ class MakeMappingCommand extends Command
                             {model? : Target model class (FQCN) - will prompt if not provided}
                             {--output= : Path to save mapping file (default: mappings/{ModelClass}.json)}
                             {--force : Overwrite existing mapping file}
-                            {--sanitize : Apply sanitization to the file before analysis}';
+                            {--sanitize : Apply sanitization to the file before analysis}
+                            {--sanitize-on-run : Include sanitizer config in flow_config for recurring processes}';
 
     protected $description = 'Create or configure mapping file for ETL import';
 
     public function __construct(
-        private readonly MappingOrchestrator $orchestrator
+        private readonly MappingOrchestrator $orchestrator,
+        private readonly ModelSelectionService $modelSelectionService,
+        private readonly RelationTypeService $relationTypeService
     ) {
         parent::__construct();
     }
@@ -43,6 +49,10 @@ class MakeMappingCommand extends Command
 
         $this->info("📄 Creating mapping for: {$filePath}");
         $this->newLine();
+
+        // Create interaction handler and inject into orchestrator
+        $interaction = new MappingInteraction($this, $this->modelSelectionService, $this->relationTypeService);
+        $this->orchestrator->setInteraction($interaction);
 
         $context = new MappingContext($filePath);
         $presenter = new ConsolePresenter($this);

@@ -2,6 +2,7 @@
 
 namespace InFlow\Services\Mapping;
 
+use InFlow\Commands\Interactions\MappingInteraction;
 use InFlow\Commands\MakeMappingCommand;
 use InFlow\Contracts\ReaderInterface;
 use InFlow\Detectors\FormatDetector;
@@ -31,18 +32,31 @@ use InFlow\ViewModels\MessageViewModel;
  * 4. Create mapping interactively
  * 5. Save mapping file
  */
-readonly class MappingOrchestrator
+class MappingOrchestrator
 {
+    /**
+     * Set the mapping interaction handler (injected by command).
+     *
+     * This allows the orchestrator to use interaction methods without
+     * directly accessing the command, maintaining separation of concerns.
+     */
+    private ?MappingInteraction $interaction = null;
+
     public function __construct(
-        private FileReaderService $fileReader,
-        private FormatDetector $formatDetector,
-        private Profiler $profiler,
-        private SanitizationService $sanitizationService,
-        private ConfigurationResolver $configResolver,
-        private ModelSelectionService $modelSelectionService,
-        private ModelDependencyService $dependencyService,
-        private ExecutionOrderService $executionOrderService
+        private readonly FileReaderService $fileReader,
+        private readonly FormatDetector $formatDetector,
+        private readonly Profiler $profiler,
+        private readonly SanitizationService $sanitizationService,
+        private readonly ConfigurationResolver $configResolver,
+        private readonly ModelSelectionService $modelSelectionService,
+        private readonly ModelDependencyService $dependencyService,
+        private readonly ExecutionOrderService $executionOrderService
     ) {}
+
+    public function setInteraction(MappingInteraction $interaction): void
+    {
+        $this->interaction = $interaction;
+    }
 
     /**
      * Process the mapping creation workflow from start to finish.
@@ -204,11 +218,21 @@ readonly class MappingOrchestrator
     private function selectModel(MakeMappingCommand $command, MappingContext $context, PresenterInterface $presenter): MappingContext
     {
         $modelClass = $command->argument('model');
-        if ($modelClass === null) {
-            // TODO: Interactive model selection
-            $presenter->presentMessage($this->createMessage('Model selection not yet implemented. Please provide model as argument.', 'error'));
 
-            return $context->withCancelled();
+        // If model not provided, prompt interactively
+        if ($modelClass === null) {
+            if ($this->interaction === null) {
+                $presenter->presentMessage($this->createMessage('Model selection requires interaction handler', 'error'));
+
+                return $context->withCancelled();
+            }
+
+            $modelClass = $this->interaction->promptModelSelection();
+            if ($modelClass === null) {
+                $presenter->presentMessage($this->createMessage('Model selection cancelled', 'error'));
+
+                return $context->withCancelled();
+            }
         }
 
         $normalizedModel = $this->modelSelectionService->normalizeModelClass($modelClass);
@@ -242,10 +266,186 @@ readonly class MappingOrchestrator
      */
     private function createMapping(MakeMappingCommand $command, MappingContext $context, PresenterInterface $presenter): MappingContext
     {
-        // TODO: Implement interactive mapping creation
-        $presenter->presentMessage($this->createMessage('Mapping creation not yet implemented', 'warning'));
+        if ($context->modelClass === null || $context->sourceSchema === null) {
+            return $context;
+        }
 
-        return $context;
+        // Prompt user to map columns interactively (no auto-matching)
+        $mappingResult = ['main' => [], 'related' => []];
+        if ($this->interaction !== null) {
+            $mappingResult = $this->interaction->promptColumnMappings($context->sourceSchema, $context->modelClass);
+        } else {
+            // Fallback: if no interaction handler, return empty (user must provide mapping manually)
+            $presenter->presentMessage($this->createMessage('Column mapping requires interaction handler', 'error'));
+
+            return $context->withCancelled();
+        }
+
+        if (empty($mappingResult['main']) && empty($mappingResult['related'])) {
+            $presenter->presentMessage($this->createMessage('No columns mapped. Mapping creation cancelled.', 'warning'));
+
+            return $context->withCancelled();
+        }
+
+        // Build all mappings (main + related models)
+        $allMappings = [];
+
+        // Main model mapping
+        $mainExecutionOrder = 1;
+        if ($context->dependencyAnalysis !== null && ! $context->dependencyAnalysis['isRoot']) {
+            // For now, use 1. In future, use ExecutionOrderService for multiple models
+            $mainExecutionOrder = 1;
+        }
+
+        if (! empty($mappingResult['main'])) {
+            $allMappings[] = [
+                'model' => $context->modelClass,
+                'execution_order' => $mainExecutionOrder,
+                'type' => 'model',
+                'columns' => $mappingResult['main'],
+            ];
+        }
+
+        // Related model mappings
+        $executionOrders = [];
+        if (! empty($mappingResult['related'])) {
+            // Determine execution order for related models
+            $modelClasses = array_merge(
+                [$context->modelClass],
+                array_keys($mappingResult['related'])
+            );
+
+            // Build dependency graph including nested relations from mappings
+            $nestedDependencies = $this->extractNestedDependencies($mappingResult['related'], $context->modelClass);
+            
+            try {
+                $executionOrders = $this->executionOrderService->suggestExecutionOrder($modelClasses);
+                
+                // Apply nested dependencies: if Book has tags.*.name, Tag depends on Book
+                foreach ($nestedDependencies as $nestedModel => $parentModel) {
+                    if (isset($executionOrders[$parentModel]) && isset($executionOrders[$nestedModel])) {
+                        // Ensure nested model has higher execution_order than parent
+                        if ($executionOrders[$nestedModel] <= $executionOrders[$parentModel]) {
+                            $executionOrders[$nestedModel] = $executionOrders[$parentModel] + 1;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // If circular dependency or error, use simple incremental order
+                $order = $mainExecutionOrder + 1;
+                foreach (array_keys($mappingResult['related']) as $relatedModelClass) {
+                    $executionOrders[$relatedModelClass] = $order++;
+                }
+                
+                // Apply nested dependencies
+                foreach ($nestedDependencies as $nestedModel => $parentModel) {
+                    if (isset($executionOrders[$parentModel]) && isset($executionOrders[$nestedModel])) {
+                        if ($executionOrders[$nestedModel] <= $executionOrders[$parentModel]) {
+                            $executionOrders[$nestedModel] = $executionOrders[$parentModel] + 1;
+                        }
+                    }
+                }
+            }
+
+            foreach ($mappingResult['related'] as $relatedModelClass => $relatedMapping) {
+                $executionOrder = $executionOrders[$relatedModelClass] ?? ($mainExecutionOrder + 1);
+                // Update execution_order in relatedMapping for summary
+                $mappingResult['related'][$relatedModelClass]['execution_order'] = $executionOrder;
+                
+                $allMappings[] = [
+                    'model' => $relatedModelClass,
+                    'execution_order' => $executionOrder,
+                    'type' => 'model',
+                    'columns' => $relatedMapping['columns'],
+                ];
+            }
+        }
+
+        // Build mapping data structure
+        $mappingData = [
+            'version' => '1.0',
+            'name' => class_basename($context->modelClass).' - '.basename($context->filePath),
+            'description' => "Mapping for {$context->modelClass} from ".basename($context->filePath),
+            'source_schema' => $this->convertSourceSchemaToArray($context->sourceSchema),
+            'flow_config' => $this->buildFlowConfig($context, $command),
+            'mappings' => $allMappings,
+        ];
+
+        $totalColumns = count($mappingResult['main']) + array_sum(array_map(fn ($m) => count($m['columns']), $mappingResult['related']));
+        $totalMappings = count($allMappings);
+
+        // Show final summary with correct execution orders
+        if ($this->interaction !== null) {
+            $this->interaction->showFinalMappingSummary($mappingResult['main'], $mappingResult['related'], $context->modelClass, $executionOrders ?? []);
+        }
+
+        $presenter->presentMessage($this->createMessage(
+            "Mapping created: {$totalColumns} column(s) mapped across {$totalMappings} model(s)",
+            'success'
+        ));
+
+        return $context->withMappingData($mappingData);
+    }
+
+    /**
+     * Extract nested dependencies from mappings.
+     * 
+     * If Tag mapping has "tags.*.name" and Tag has BelongsToMany with Book,
+     * then Tag depends on Book (Tag should be executed after Book).
+     * 
+     * @param  array<string, array{model: string, columns: array}>  $relatedMappings
+     * @param  string  $rootModelClass
+     * @return array<string, string> Map of [nested_model => parent_model]
+     */
+    private function extractNestedDependencies(array $relatedMappings, string $rootModelClass): array
+    {
+        $dependencies = [];
+        
+        // Check each model's mappings for nested relations
+        foreach ($relatedMappings as $nestedModelClass => $nestedMapping) {
+            // Check if this model has mappings with relation targets (e.g., "tags.*.name")
+            $hasNestedRelationTarget = false;
+            $nestedRelationName = null;
+            
+            foreach ($nestedMapping['columns'] as $column) {
+                $target = $column['target'] ?? '';
+                
+                // Check if target is a relation (e.g., "tags.*.name")
+                if (preg_match('/^([^.*]+)\.\*\./', $target, $matches)) {
+                    $hasNestedRelationTarget = true;
+                    $nestedRelationName = $matches[1];
+                    break;
+                }
+            }
+            
+            if ($hasNestedRelationTarget && $nestedRelationName !== null) {
+                // Find which model has this relation pointing to nestedModelClass
+                // Example: Book has relation "tags" pointing to Tag
+                foreach ($relatedMappings as $parentModelClass => $parentMapping) {
+                    if ($parentModelClass === $nestedModelClass) {
+                        continue; // Skip self
+                    }
+                    
+                    try {
+                        $parentModel = new $parentModelClass;
+                        if (method_exists($parentModel, $nestedRelationName)) {
+                            $relation = $parentModel->$nestedRelationName();
+                            $relatedModelClass = get_class($relation->getRelated());
+                            
+                            // If parent model's relation points to nested model, nested depends on parent
+                            if ($relatedModelClass === $nestedModelClass) {
+                                $dependencies[$nestedModelClass] = $parentModelClass;
+                                break;
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        // Skip if we can't determine the relation
+                    }
+                }
+            }
+        }
+        
+        return $dependencies;
     }
 
     /**
@@ -253,6 +453,12 @@ readonly class MappingOrchestrator
      */
     private function saveMapping(MakeMappingCommand $command, MappingContext $context, PresenterInterface $presenter): MappingContext
     {
+        if ($context->mappingData === null) {
+            $presenter->presentMessage($this->createMessage('No mapping data to save', 'error'));
+
+            return $context->withCancelled();
+        }
+
         // Determine output path
         $outputPath = $command->option('output');
         if ($outputPath === null && $context->modelClass !== null) {
@@ -260,23 +466,63 @@ readonly class MappingOrchestrator
             $outputPath = "mappings/{$modelName}.json";
         }
 
+        // If still no output path, prompt interactively
         if ($outputPath === null) {
-            $presenter->presentMessage($this->createMessage('Cannot determine output path for mapping file', 'error'));
+            if ($this->interaction !== null) {
+                $outputPath = $this->interaction->promptOutputPath();
+                if ($outputPath === null) {
+                    $presenter->presentMessage($this->createMessage('Output path required', 'error'));
 
-            return $context->withCancelled();
+                    return $context->withCancelled();
+                }
+            } else {
+                $presenter->presentMessage($this->createMessage('Cannot determine output path for mapping file', 'error'));
+
+                return $context->withCancelled();
+            }
         }
 
         // Check if file exists and --force not set
         if (file_exists($outputPath) && ! $command->option('force')) {
-            $presenter->presentMessage($this->createMessage("Mapping file already exists: {$outputPath}. Use --force to overwrite.", 'error'));
+            // Prompt for confirmation if interaction handler available
+            if ($this->interaction !== null) {
+                if (! $this->interaction->promptOverwriteConfirmation($outputPath)) {
+                    $presenter->presentMessage($this->createMessage('Mapping creation cancelled', 'warning'));
+
+                    return $context->withCancelled();
+                }
+            } else {
+                $presenter->presentMessage($this->createMessage("Mapping file already exists: {$outputPath}. Use --force to overwrite.", 'error'));
+
+                return $context->withCancelled();
+            }
+        }
+
+        // Ensure directory exists
+        $directory = dirname($outputPath);
+        if ($directory !== '.' && ! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        // Save mapping file
+        try {
+            $json = json_encode($context->mappingData, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            if ($json === false) {
+                throw new \RuntimeException('Failed to encode mapping to JSON: '.json_last_error_msg());
+            }
+
+            if (file_put_contents($outputPath, $json) === false) {
+                throw new \RuntimeException("Failed to write mapping file: {$outputPath}");
+            }
+
+            $presenter->presentMessage($this->createMessage("Mapping saved to: {$outputPath}", 'success'));
+
+            return $context->withOutputPath($outputPath);
+        } catch (\Exception $e) {
+            $presenter->presentMessage($this->createMessage("Failed to save mapping: {$e->getMessage()}", 'error'));
 
             return $context->withCancelled();
         }
-
-        // TODO: Implement actual mapping data creation and saving
-        $presenter->presentMessage($this->createMessage('Mapping saving not yet implemented', 'warning'));
-
-        return $context->withOutputPath($outputPath);
     }
 
     /**
@@ -291,6 +537,84 @@ readonly class MappingOrchestrator
             'xml' => new XmlReader($source),
             default => null,
         };
+    }
+
+    /**
+     * Convert SourceSchema to array format for JSON.
+     */
+    private function convertSourceSchemaToArray(?\InFlow\ValueObjects\Data\SourceSchema $schema): array
+    {
+        if ($schema === null) {
+            return ['columns' => [], 'total_rows' => 0];
+        }
+
+        $columns = [];
+        foreach ($schema->columns as $column) {
+            $columns[$column->name] = [
+                'name' => $column->name,
+                'type' => $column->type->value,
+                'null_count' => $column->nullCount,
+                'unique_count' => $column->uniqueCount,
+                'min' => $column->min,
+                'max' => $column->max,
+                'examples' => $column->examples,
+            ];
+        }
+
+        return [
+            'columns' => $columns,
+            'total_rows' => $schema->totalRows,
+        ];
+    }
+
+    /**
+     * Build flow_config from context.
+     *
+     * @param  MakeMappingCommand  $command  Command instance to check for --sanitize-on-run option
+     */
+    private function buildFlowConfig(MappingContext $context, MakeMappingCommand $command): array
+    {
+        $flowConfig = [];
+
+        // Add format config if available
+        if ($context->format !== null) {
+            $flowConfig['format'] = [
+                'type' => $context->format->type->value,
+                'delimiter' => $context->format->delimiter,
+                'quote_char' => $context->format->quoteChar,
+                'has_header' => $context->format->hasHeader,
+                'encoding' => $context->format->encoding,
+            ];
+        }
+
+        // Add sanitizer config if --sanitize-on-run is set (for recurring processes)
+        if ($this->shouldIncludeSanitizerInFlowConfig($command)) {
+            $flowConfig['sanitizer'] = [
+                'enabled' => true,
+                'remove_bom' => true,
+                'normalize_newlines' => true,
+                'remove_control_chars' => true,
+                'newline_format' => 'lf',
+            ];
+        }
+
+        // Add execution config with defaults
+        $flowConfig['execution'] = [
+            'chunk_size' => 1000,
+            'error_policy' => 'continue',
+            'skip_empty_rows' => true,
+            'truncate_long_fields' => true,
+        ];
+
+        return $flowConfig;
+    }
+
+    /**
+     * Check if sanitizer should be included in flow_config for recurring processes.
+     */
+    private function shouldIncludeSanitizerInFlowConfig(MakeMappingCommand $command): bool
+    {
+        return $command->option('sanitize-on-run') === true;
     }
 
     /**

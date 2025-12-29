@@ -78,6 +78,43 @@ class ModelSelectionService
     }
 
     /**
+     * Get all Eloquent models in a namespace.
+     *
+     * @param  string  $namespace  The namespace to scan (e.g., "App\Models")
+     * @return array<string> Array of fully qualified model class names
+     */
+    public function getAllModelsInNamespace(string $namespace = 'App\\Models'): array
+    {
+        $models = [];
+
+        // Convert namespace to directory path
+        // App\Models -> app/Models
+        $namespaceParts = explode('\\', $namespace);
+        $basePath = app_path();
+        $relativePath = implode('/', array_slice($namespaceParts, 1)); // Remove "App"
+        $directory = $basePath.'/'.$relativePath;
+
+        if (! is_dir($directory)) {
+            return [];
+        }
+
+        // Scan directory for PHP files
+        $files = glob($directory.'/*.php');
+
+        foreach ($files as $file) {
+            $className = basename($file, '.php');
+            $modelClass = $namespace.'\\'.$className;
+
+            // Check if class exists and is an Eloquent model
+            if (class_exists($modelClass) && is_subclass_of($modelClass, Model::class)) {
+                $models[] = $modelClass;
+            }
+        }
+
+        return $models;
+    }
+
+    /**
      * Get model relations with their related model classes.
      *
      * Uses reflection to discover Eloquent relations by analyzing method return types.
