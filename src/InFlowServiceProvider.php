@@ -87,6 +87,9 @@ class InFlowServiceProvider extends ServiceProvider
         $this->app->singleton(\InFlow\Services\Mapping\TransformSelectionService::class);
         $this->app->singleton(\InFlow\Services\Mapping\TransformFormatterService::class);
         $this->app->singleton(\InFlow\Services\Mapping\ModelCastService::class);
+        $this->app->singleton(\InFlow\Services\Mapping\ModelDependencyService::class);
+        $this->app->singleton(\InFlow\Services\Mapping\ExecutionOrderService::class);
+        $this->app->singleton(\InFlow\Services\Mapping\MappingOrchestrator::class);
     }
 
     /**
@@ -116,6 +119,9 @@ class InFlowServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 \InFlow\Commands\InFlowCommand::class,
+                \InFlow\Commands\MakeMappingCommand::class,
+                \InFlow\Commands\TestModelDependencyCommand::class,
+                \InFlow\Commands\TestExecutionOrderCommand::class,
             ]);
         }
     }

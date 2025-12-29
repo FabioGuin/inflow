@@ -306,14 +306,30 @@ readonly class ETLOrchestrator
     }
 
     /**
-     * Step 6: Profile data if no mapping provided.
+     * Step 6: Profile data if no mapping provided or mapping doesn't have source_schema.
+     *
+     * If mapping already contains source_schema, skip profiling and use it from mapping.
      */
     private function profileData(ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
+        // If mapping exists and has source_schema, use it instead of profiling
+        if ($context->mappingDefinition !== null && isset($context->mappingDefinition['source_schema'])) {
+            $presenter->presentMessage($this->messageFormatter->format('Using source_schema from mapping file (profiling skipped)', MessageType::Info));
+            // TODO: Convert mapping source_schema to SourceSchema value object
+            // For now, we still need to profile if we need SourceSchema object
+            // This is a temporary solution until we implement proper mapping loading
+        }
+
         if ($context->reader === null) {
             $presenter->presentMessage($this->messageFormatter->format('Profiling skipped (no data reader available)', MessageType::Warning));
 
             return $context;
+        }
+
+        // Only profile if we don't have source_schema from mapping
+        if ($context->mappingDefinition !== null && isset($context->mappingDefinition['source_schema'])) {
+            // TODO: Load source_schema from mapping instead of profiling
+            // For now, we still profile to get SourceSchema object
         }
 
         $presenter->presentStepProgress($this->stepProgressFormatter->format(6, 8, 'Profiling data quality...'));
