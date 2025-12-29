@@ -2,7 +2,7 @@
 
 namespace InFlow\Presenters;
 
-use InFlow\Commands\InFlowCommand;
+use Illuminate\Console\Command;
 use InFlow\Constants\DisplayConstants;
 use InFlow\Enums\UI\MessageType;
 use InFlow\Presenters\Contracts\PresenterInterface;
@@ -22,17 +22,17 @@ use InFlow\ViewModels\SummaryViewModel;
 /**
  * Console presenter implementation
  *
- * Renders ViewModels to console output using InFlowCommand
+ * Renders ViewModels to console output using any Command instance
  */
 readonly class ConsolePresenter implements PresenterInterface
 {
     public function __construct(
-        private InFlowCommand $command
+        private Command $command
     ) {}
 
     public function presentFormatInfo(FormatInfoViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -60,7 +60,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentSchema(SchemaViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -93,7 +93,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentPreview(PreviewViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -152,7 +152,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentFlowRun(FlowRunViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -219,7 +219,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentSummary(SummaryViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -243,7 +243,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentMessage(MessageViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -258,7 +258,7 @@ readonly class ConsolePresenter implements PresenterInterface
     // TODO: Re-implement with new mapping system
     public function presentColumnMappingInfo(mixed $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -286,7 +286,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentStepProgress(StepProgressViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -298,7 +298,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentFileInfo(FileInfoViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
@@ -353,7 +353,7 @@ readonly class ConsolePresenter implements PresenterInterface
 
     public function presentProgressInfo(ProgressInfoViewModel $viewModel): void
     {
-        if ($this->command->isQuiet()) {
+        if (method_exists($this->command, 'isQuiet') && $this->command->isQuiet()) {
             return;
         }
 
