@@ -252,6 +252,8 @@ class Profiler
 
         $numericCount = count($stats['numeric_values']);
         $dateCount = count($stats['date_values']);
+        $timestampCount = count($stats['timestamp_values'] ?? []);
+        $timeCount = count($stats['time_values'] ?? []);
         $boolCount = count($stats['bool_values']);
         $emailCount = count($stats['email_values'] ?? []);
         $urlCount = count($stats['url_values'] ?? []);
@@ -263,6 +265,8 @@ class Profiler
 
         $numericRatio = $numericCount / $nonNullCount;
         $dateRatio = $dateCount / $nonNullCount;
+        $timestampRatio = $timestampCount / $nonNullCount;
+        $timeRatio = $timeCount / $nonNullCount;
         $boolRatio = $boolCount / $nonNullCount;
         $emailRatio = $emailCount / $nonNullCount;
         $urlRatio = $urlCount / $nonNullCount;
@@ -277,7 +281,7 @@ class Profiler
         // Boolean: at least 80% boolean values AND at least 2 boolean values
         // OR if column has only "1"/"0" values (common CSV boolean pattern)
         $boolValues = array_unique($stats['bool_values'] ?? []);
-        $onlyOneZero = $nonNullCount > 0 && 
+        $onlyOneZero = $nonNullCount > 0 &&
                        $boolCount >= 2 &&
                        count($boolValues) <= 2 &&
                        empty(array_diff($boolValues, ['1', '0', 1, 0, 'true', 'false', true, false]));
@@ -336,7 +340,7 @@ class Profiler
                 if (is_numeric($value)) {
                     $floatVal = (float) $value;
                     $intVal = (int) $floatVal;
-                    
+
                     // Check if it's actually a float (has decimal part)
                     if ($floatVal != $intVal) {
                         $hasDecimal = true;

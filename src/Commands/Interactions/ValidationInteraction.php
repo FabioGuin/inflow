@@ -6,28 +6,27 @@ use InFlow\Commands\InFlowCommand;
 use InFlow\Constants\DisplayConstants;
 use InFlow\Enums\Data\FieldHandlerAction;
 use InFlow\Enums\UI\InteractiveCommand;
-use InFlow\Mappings\MappingSerializer;
 use InFlow\Services\Core\ConfigurationResolver;
-use InFlow\Services\Mapping\MappingValidationService;
 use InFlow\ValueObjects\Data\SourceSchema;
-use InFlow\ValueObjects\Mapping\MappingDefinition;
+
+// TODO: Re-implement with new mapping system
 
 use function Laravel\Prompts\confirm;
 use function Laravel\Prompts\select;
 
 class ValidationInteraction
 {
-    private ?MappingDefinition $currentMapping = null;
+    private mixed $currentMapping = null; // TODO: Replace with new mapping type
 
     public function __construct(
         private readonly InFlowCommand $command,
-        private readonly MappingValidationService $mappingValidationService,
-        private readonly ConfigurationResolver $configResolver,
-        private readonly MappingSerializer $mappingSerializer,
-        private readonly MappingInteraction $mappingInteraction
-    ) {}
+        private readonly ConfigurationResolver $configResolver
+    ) {
+        // TODO: Re-implement with new mapping system
+    }
 
-    public function validateMappingBeforeExecution(MappingDefinition $mapping, SourceSchema $sourceSchema): bool|MappingDefinition
+    // TODO: Re-implement with new mapping system
+    public function validateMappingBeforeExecution(mixed $mapping, SourceSchema $sourceSchema): bool|mixed
     {
         // Store mapping for use in transform field selection
         $this->currentMapping = $mapping;

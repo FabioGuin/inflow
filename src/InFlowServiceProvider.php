@@ -49,7 +49,7 @@ class InFlowServiceProvider extends ServiceProvider
         $this->app->singleton(\InFlow\Services\Formatter\FlowRunFormatter::class);
         $this->app->singleton(\InFlow\Services\Formatter\SummaryFormatter::class);
         $this->app->singleton(\InFlow\Services\Formatter\MessageFormatter::class);
-        $this->app->singleton(\InFlow\Services\Formatter\ColumnMappingInfoFormatter::class);
+        // ColumnMappingInfoFormatter removed - TODO: Re-implement with new mapping system
         $this->app->singleton(\InFlow\Services\Formatter\StepProgressFormatter::class);
         $this->app->singleton(\InFlow\Services\Formatter\FileInfoFormatter::class);
         $this->app->singleton(\InFlow\Services\Formatter\StepSummaryFormatter::class);
@@ -78,19 +78,15 @@ class InFlowServiceProvider extends ServiceProvider
 
     /**
      * Register mapping-related services.
+     *
+     * TODO: Re-implement with new mapping system
      */
     private function registerMappingServices(): void
     {
-        $this->app->singleton(\InFlow\Mappings\MappingSerializer::class);
-        $this->app->singleton(\InFlow\Mappings\MappingBuilder::class);
-        $this->app->singleton(\InFlow\Mappings\MappingValidator::class);
-        $this->app->singleton(\InFlow\Services\Mapping\MappingGenerationService::class);
-        $this->app->singleton(\InFlow\Services\Mapping\MappingHistoryService::class);
+        // All mapping services removed - will be re-implemented with new mapping system
         $this->app->singleton(\InFlow\Services\Mapping\TransformSelectionService::class);
         $this->app->singleton(\InFlow\Services\Mapping\TransformFormatterService::class);
-        $this->app->singleton(\InFlow\Services\Mapping\MappingValidationService::class);
         $this->app->singleton(\InFlow\Services\Mapping\ModelCastService::class);
-        $this->app->singleton(\InFlow\Services\Mapping\MappingDependencyValidator::class);
     }
 
     /**

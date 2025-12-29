@@ -3,7 +3,7 @@
 namespace InFlow\Presenters;
 
 use InFlow\Presenters\Contracts\PresenterInterface;
-use InFlow\ViewModels\ColumnMappingInfoViewModel;
+// TODO: Re-implement with new mapping system
 use InFlow\ViewModels\FileInfoViewModel;
 use InFlow\ViewModels\FlowRunViewModel;
 use InFlow\ViewModels\FormatInfoViewModel;
@@ -58,7 +58,8 @@ readonly class NullPresenter implements PresenterInterface
         // No-op
     }
 
-    public function presentColumnMappingInfo(ColumnMappingInfoViewModel $viewModel): void
+    // TODO: Re-implement with new mapping system
+    public function presentColumnMappingInfo(mixed $viewModel): void
     {
         // No-op
     }

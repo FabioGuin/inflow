@@ -3,10 +3,8 @@
 namespace InFlow\Executors;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\QueryException;
 use Illuminate\Validation\ValidationException;
 use InFlow\Loaders\EloquentLoader;
-use InFlow\Mappings\MappingValidator;
 use InFlow\Profilers\Profiler;
 use InFlow\Readers\CsvReader;
 use InFlow\Readers\ExcelReader;
@@ -14,13 +12,11 @@ use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
 use InFlow\Services\Core\FlowExecutionService;
 use InFlow\Services\Loading\PivotSyncService;
-use InFlow\Services\Mapping\MappingDependencyValidator;
 use InFlow\Sources\FileSource;
 use InFlow\ValueObjects\Data\Row;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
 use InFlow\ValueObjects\Flow\FlowRun;
-use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Executor for orchestrating the complete ETL pipeline
@@ -57,8 +53,6 @@ class FlowExecutor
         private readonly FlowExecutionService $flowExecutionService,
         private readonly Profiler $profiler,
         private readonly EloquentLoader $loader,
-        private readonly MappingValidator $mappingValidator,
-        private readonly MappingDependencyValidator $dependencyValidator,
         private readonly PivotSyncService $pivotSyncService,
         ?callable $progressCallback = null,
         ?callable $errorDecisionCallback = null
@@ -399,112 +393,11 @@ class FlowExecutor
      */
     private function processRow(Row $row, Flow $flow, array &$executionStatistics, FlowRun $run): array
     {
-        if ($flow->mapping === null) {
-            return ['run' => $run, 'shouldStop' => false];
-        }
-
-        // Process each model mapping in the mapping definition
-        foreach ($flow->mapping->mappings as $modelMapping) {
-            $result = $this->processModelMappingForRow($row, $modelMapping, $flow, $executionStatistics, $run);
-
-            // If we should stop, return immediately
-            if ($result['shouldStop']) {
-                return $result;
-            }
-
-            $run = $result['run'];
-        }
-
+        // TODO: Re-implement with new mapping system
         return ['run' => $run, 'shouldStop' => false];
     }
 
-    /**
-     * Process a single row with a specific model mapping.
-     *
-     * @param  Row  $row  The row to process
-     * @param  ModelMapping  $modelMapping  The model mapping to use
-     * @param  Flow  $flow  The flow configuration
-     * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
-     * @param  FlowRun  $run  The current flow run
-     * @return array{run: FlowRun, shouldStop: bool} Processing result
-     */
-    private function processModelMappingForRow(Row $row, ModelMapping $modelMapping, Flow $flow, array &$executionStatistics, FlowRun $run): array
-    {
-        $stopOnError = $flow->shouldStopOnError() || $this->forceStopOnError;
-
-        try {
-            // Handle pivot_sync type
-            if ($modelMapping->type === 'pivot_sync') {
-                $this->processPivotSync($row, $modelMapping, $executionStatistics);
-            } else {
-                // Standard model mapping
-                $this->processModelMapping($row, $modelMapping, $flow, $executionStatistics);
-            }
-
-            return ['run' => $run, 'shouldStop' => false];
-        } catch (ValidationException $e) {
-            return $this->handleValidationError($e, $row, $flow, $executionStatistics, $run, $stopOnError);
-        } catch (\Exception $e) {
-            return $this->handleProcessingError($e, $row, $modelMapping, $flow, $executionStatistics, $run, $stopOnError);
-        }
-    }
-
-    /**
-     * Process a single model mapping.
-     *
-     * Business logic: validates row, then loads model using EloquentLoader.
-     * Presentation: emits row imported/skipped events.
-     *
-     * @param  Row  $row  The row to process
-     * @param  ModelMapping  $modelMapping  The model mapping
-     * @param  Flow  $flow  The flow configuration
-     * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
-     *
-     * @throws ValidationException If validation fails
-     */
-    private function processModelMapping(Row $row, ModelMapping $modelMapping, Flow $flow, array &$executionStatistics): void
-    {
-        // Business logic: validate row before loading
-        $validationResult = $this->mappingValidator->validateRow($row, $modelMapping);
-        if (! $validationResult['passes']) {
-            throw ValidationException::withMessages($validationResult['errors']);
-        }
-
-        // Business logic: reset truncated fields for this row
-        $this->loader->resetTruncatedFields();
-
-        // Business logic: load model
-        $model = $this->loader->load($row, $modelMapping, $flow->shouldTruncateLongFields());
-
-        // Business logic: collect truncated fields details for this row
-        $this->collectTruncatedFields($row, $executionStatistics);
-
-        // Business logic: update statistics
-        if ($model === null) {
-            // Model was skipped (duplicate with 'skip' strategy)
-            $executionStatistics['skipped']++;
-        } else {
-            $executionStatistics['imported']++;
-        }
-    }
-
-    /**
-     * Process pivot sync for a row.
-     *
-     * @param  Row  $row  The row to process
-     * @param  ModelMapping  $modelMapping  The pivot_sync mapping
-     * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
-     */
-    private function processPivotSync(Row $row, ModelMapping $modelMapping, array &$executionStatistics): void
-    {
-        try {
-            $this->pivotSyncService->sync($row, $modelMapping);
-            $executionStatistics['imported']++;
-        } catch (\Exception $e) {
-            $executionStatistics['errors']++;
-            throw $e;
-        }
-    }
+    // TODO: Re-implement processModelMappingForRow, processModelMapping, processPivotSync with new mapping system
 
     /**
      * Collect truncated fields details for a row.
@@ -593,19 +486,18 @@ class FlowExecutor
     /**
      * Handle processing error.
      *
-     * Business logic: updates statistics and adds error to run.
-     * Presentation: logs error and emits row skipped event.
+     * TODO: Re-implement with new mapping system
      *
      * @param  \Exception  $e  The exception
      * @param  Row  $row  The row that failed
-     * @param  ModelMapping  $modelMapping  The model mapping that failed
+     * @param  mixed  $modelMapping  The model mapping that failed - TODO: Replace with new mapping type
      * @param  Flow  $flow  The flow configuration
      * @param  array<string, mixed>  $executionStatistics  The statistics array (by reference)
      * @param  FlowRun  $run  The current flow run
      * @param  bool  $stopOnError  Whether to stop on error
      * @return array{run: FlowRun, shouldStop: bool} Processing result
      */
-    private function handleProcessingError(\Exception $e, Row $row, ModelMapping $modelMapping, Flow $flow, array &$executionStatistics, FlowRun $run, bool $stopOnError): array
+    private function handleProcessingError(\Exception $e, Row $row, mixed $modelMapping, Flow $flow, array &$executionStatistics, FlowRun $run, bool $stopOnError): array
     {
         $decision = $this->decideOnRowError($e, $row, $flow, $executionStatistics['rowNumber']);
 

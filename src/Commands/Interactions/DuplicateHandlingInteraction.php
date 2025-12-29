@@ -5,8 +5,8 @@ namespace InFlow\Commands\Interactions;
 use Illuminate\Support\Facades\DB;
 use InFlow\Commands\InFlowCommand;
 use InFlow\Enums\Data\DuplicateStrategy;
-use InFlow\ValueObjects\Mapping\MappingDefinition;
-use InFlow\ValueObjects\Mapping\ModelMapping;
+
+// TODO: Re-implement with new mapping system
 
 use function Laravel\Prompts\select;
 
@@ -24,7 +24,8 @@ class DuplicateHandlingInteraction
     /**
      * Configure duplicate handling for a mapping.
      */
-    public function configure(MappingDefinition $mapping, string $modelClass): MappingDefinition
+    // TODO: Re-implement with new mapping system
+    public function configure(mixed $mapping, string $modelClass): mixed
     {
         if ($this->command->isQuiet() || $this->command->option('no-interaction')) {
             return $this->autoConfigure($mapping, $modelClass);
@@ -92,7 +93,8 @@ class DuplicateHandlingInteraction
     /**
      * Auto-configure duplicate handling (non-interactive mode).
      */
-    private function autoConfigure(MappingDefinition $mapping, string $modelClass): MappingDefinition
+    // TODO: Re-implement with new mapping system
+    private function autoConfigure(mixed $mapping, string $modelClass): mixed
     {
         try {
             $model = new $modelClass;
@@ -112,7 +114,8 @@ class DuplicateHandlingInteraction
     /**
      * Interactive duplicate handling configuration.
      */
-    private function interactiveConfigure(MappingDefinition $mapping, string $modelClass): MappingDefinition
+    // TODO: Re-implement with new mapping system
+    private function interactiveConfigure(mixed $mapping, string $modelClass): mixed
     {
         try {
             $model = new $modelClass;
@@ -188,7 +191,8 @@ class DuplicateHandlingInteraction
     /**
      * Apply duplicate handling configuration to mapping.
      */
-    private function applyConfig(MappingDefinition $mapping, string $uniqueKey, string $strategy): MappingDefinition
+    // TODO: Re-implement with new mapping system
+    private function applyConfig(mixed $mapping, string $uniqueKey, string $strategy): mixed
     {
         $updatedMappings = [];
 
@@ -197,16 +201,11 @@ class DuplicateHandlingInteraction
             $options['unique_key'] = $uniqueKey;
             $options['duplicate_strategy'] = $strategy;
 
-            $updatedMappings[] = new ModelMapping(
-                modelClass: $modelMapping->modelClass,
-                columns: $modelMapping->columns,
-                options: $options
-            );
+            // TODO: Re-implement with new mapping system
+            // $updatedMappings[] = new ModelMapping(...);
         }
 
-        return new MappingDefinition(
-            mappings: $updatedMappings,
-            sourceSchema: $mapping->sourceSchema
-        );
+        // TODO: Re-implement with new mapping system
+        return $mapping;
     }
 }

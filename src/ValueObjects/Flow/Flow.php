@@ -3,7 +3,6 @@
 namespace InFlow\ValueObjects\Flow;
 
 use InFlow\Enums\Flow\ErrorPolicy;
-use InFlow\ValueObjects\Mapping\MappingDefinition;
 
 /**
  * Value Object representing a complete, reusable ETL flow configuration
@@ -24,7 +23,7 @@ readonly class Flow
      * @param  array<string, mixed>  $sourceConfig  Source configuration (e.g., ['path' => '...', 'type' => 'file'])
      * @param  array<string, mixed>  $sanitizerConfig  Sanitization settings (BOM removal, control chars, newlines)
      * @param  array<string, mixed>|null  $formatConfig  Format detection overrides (optional, null = auto-detect)
-     * @param  MappingDefinition|null  $mapping  Mapping definition (optional, can be loaded separately)
+     * @param  mixed|null  $mapping  Mapping definition - TODO: Re-implement with new mapping system
      * @param  array<string, mixed>  $options  Execution options (chunk_size, error_policy, etc.)
      * @param  string  $name  Flow name for identification
      * @param  string|null  $description  Optional description
@@ -33,7 +32,7 @@ readonly class Flow
         public array $sourceConfig,
         public array $sanitizerConfig,
         public ?array $formatConfig,
-        public ?MappingDefinition $mapping,
+        public mixed $mapping = null, // TODO: Re-implement with new mapping system
         public array $options,
         public string $name,
         public ?string $description = null
@@ -90,7 +89,7 @@ readonly class Flow
             'source_config' => $this->sourceConfig,
             'sanitizer_config' => $this->sanitizerConfig,
             'format_config' => $this->formatConfig,
-            'mapping' => $this->mapping?->toArray(),
+            'mapping' => null, // TODO: Re-implement with new mapping system
             'options' => $this->options,
         ];
     }
@@ -104,7 +103,7 @@ readonly class Flow
             sourceConfig: $data['source_config'] ?? [],
             sanitizerConfig: $data['sanitizer_config'] ?? [],
             formatConfig: $data['format_config'] ?? null,
-            mapping: isset($data['mapping']) ? MappingDefinition::fromArray($data['mapping']) : null,
+            mapping: null, // TODO: Re-implement with new mapping system
             options: $data['options'] ?? [],
             name: $data['name'] ?? 'Unnamed Flow',
             description: $data['description'] ?? null

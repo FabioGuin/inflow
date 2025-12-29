@@ -6,7 +6,7 @@ use InFlow\Commands\InFlowCommand;
 use InFlow\Constants\DisplayConstants;
 use InFlow\Enums\UI\MessageType;
 use InFlow\Presenters\Contracts\PresenterInterface;
-use InFlow\ViewModels\ColumnMappingInfoViewModel;
+// TODO: Re-implement with new mapping system
 use InFlow\ViewModels\FileInfoViewModel;
 use InFlow\ViewModels\FlowRunViewModel;
 use InFlow\ViewModels\FormatInfoViewModel;
@@ -191,13 +191,17 @@ readonly class ConsolePresenter implements PresenterInterface
                     $this->command->line('    <fg=yellow>Exception:</> '.$error['exception']);
                 }
 
-                if (isset($error['rowNumber'])) {
-                    $this->command->line('    <fg=yellow>Row:</> '.$error['rowNumber']);
+                if (isset($error['row']) || isset($error['rowNumber'])) {
+                    $rowNum = $error['row'] ?? $error['rowNumber'] ?? 'unknown';
+                    $this->command->line('    <fg=yellow>Row:</> '.$rowNum);
                 }
 
-                if (isset($error['errors']) && is_array($error['errors'])) {
+                // Check for validation errors in context or directly in error
+                $validationErrors = $error['errors'] ?? $error['context']['errors'] ?? $error['context']['validation_errors'] ?? null;
+
+                if ($validationErrors !== null && is_array($validationErrors)) {
                     $this->command->line('    <fg=yellow>Validation Errors:</>');
-                    foreach ($error['errors'] as $field => $messages) {
+                    foreach ($validationErrors as $field => $messages) {
                         if (is_array($messages)) {
                             foreach ($messages as $message) {
                                 $this->command->line("      • <fg=gray>{$field}:</> {$message}");
@@ -251,7 +255,8 @@ readonly class ConsolePresenter implements PresenterInterface
         };
     }
 
-    public function presentColumnMappingInfo(ColumnMappingInfoViewModel $viewModel): void
+    // TODO: Re-implement with new mapping system
+    public function presentColumnMappingInfo(mixed $viewModel): void
     {
         if ($this->command->isQuiet()) {
             return;

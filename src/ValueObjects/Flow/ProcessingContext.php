@@ -6,7 +6,8 @@ use InFlow\Contracts\ReaderInterface;
 use InFlow\Sources\FileSource;
 use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
-use InFlow\ValueObjects\Mapping\MappingDefinition;
+
+// TODO: Re-implement with new mapping system
 
 /**
  * Immutable value object that holds state throughout the ETL processing pipeline.
@@ -32,7 +33,7 @@ class ProcessingContext
      * @param  DetectedFormat|null  $format  Detected file format (CSV, Excel, etc.)
      * @param  ReaderInterface|null  $reader  Reader instance for data access
      * @param  SourceSchema|null  $sourceSchema  Profiled schema of the data
-     * @param  MappingDefinition|null  $mappingDefinition  Mapping configuration
+     * @param  mixed|null  $mappingDefinition  Mapping configuration - TODO: Replace with new mapping type
      * @param  FlowRun|null  $flowRun  Flow execution result
      * @param  float|null  $startTime  Processing start timestamp (microtime)
      * @param  bool  $cancelled  Whether processing was cancelled by user
@@ -46,7 +47,7 @@ class ProcessingContext
         public ?DetectedFormat $format = null,
         public ?ReaderInterface $reader = null,
         public ?SourceSchema $sourceSchema = null,
-        public ?MappingDefinition $mappingDefinition = null,
+        public mixed $mappingDefinition = null, // TODO: Replace with new mapping type
         public ?FlowRun $flowRun = null,
         public ?float $startTime = null,
         public bool $cancelled = false,
@@ -153,10 +154,12 @@ class ProcessingContext
     /**
      * Create a new instance with updated mapping definition.
      *
-     * @param  MappingDefinition  $mappingDefinition  The mapping configuration
+     * TODO: Replace with new mapping type
+     *
+     * @param  mixed  $mappingDefinition  The mapping configuration
      * @return self New instance with updated mapping
      */
-    public function withMappingDefinition(MappingDefinition $mappingDefinition): self
+    public function withMappingDefinition(mixed $mappingDefinition): self
     {
         $new = clone $this;
         $new->mappingDefinition = $mappingDefinition;

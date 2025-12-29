@@ -5,9 +5,7 @@ namespace InFlow\Services\Loading;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use InFlow\Transforms\TransformEngine;
-use InFlow\ValueObjects\Data\ColumnMapping;
 use InFlow\ValueObjects\Data\Row;
-use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Service for synchronizing many-to-many pivot relations.
@@ -25,9 +23,10 @@ readonly class PivotSyncService
      * Sync pivot relation from row data.
      *
      * @param  Row  $row  The row data
-     * @param  ModelMapping  $mapping  The pivot_sync mapping
+     *                    TODO: Re-implement with new mapping system
+     * @param  mixed  $mapping  The pivot_sync mapping
      */
-    public function sync(Row $row, ModelMapping $mapping): void
+    public function sync(Row $row, mixed $mapping): void
     {
         if ($mapping->type !== 'pivot_sync' || $mapping->relationPath === null) {
             return;
@@ -153,7 +152,8 @@ readonly class PivotSyncService
     /**
      * Extract and transform value from row.
      */
-    private function extractAndTransformValue(Row $row, ColumnMapping $column): mixed
+    // TODO: Re-implement with new mapping system
+    private function extractAndTransformValue(Row $row, mixed $column): mixed
     {
         $value = $row->get($column->sourceColumn);
 

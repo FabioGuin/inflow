@@ -11,9 +11,7 @@ use InFlow\Exceptions\RelationResolutionException;
 use InFlow\Services\Loading\RelationTypeService;
 use InFlow\Services\Loading\Strategies\RelationSyncStrategyFactory;
 use InFlow\Transforms\TransformEngine;
-use InFlow\ValueObjects\Data\ColumnMapping;
 use InFlow\ValueObjects\Data\Row;
-use InFlow\ValueObjects\Mapping\ModelMapping;
 
 /**
  * Simplified Eloquent loader that consolidates all loading services.
@@ -64,116 +62,28 @@ class EloquentLoader
     /**
      * Load a row into a model using the mapping definition
      *
+     * TODO: Re-implement with new mapping system
+     *
      * @param  bool  $truncateLongFields  Whether to truncate fields that exceed column max length
      * @return Model|null The loaded model, or null if the model was skipped (e.g., duplicate with 'skip' strategy)
      */
-    public function load(Row $row, ModelMapping $mapping, bool $truncateLongFields = true): ?Model
+    public function load(Row $row, mixed $mapping, bool $truncateLongFields = true): ?Model
     {
-        // Group attributes and relations
-        $grouped = $this->groupAttributesAndRelations($row, $mapping, $truncateLongFields);
-        $attributes = $grouped['attributes'];
-        $relations = $grouped['relations'];
-        $this->truncatedFields = $grouped['truncatedFields'];
-
-        // Separate BelongsTo relations from others
-        // BelongsTo relations need to be resolved FIRST to get foreign keys before creating/updating the model
-        $separated = $this->separateRelations($relations, $mapping->modelClass);
-        $belongsToRelations = $separated['belongsTo'];
-        $otherRelations = $separated['other'];
-
-        // Add foreign keys from BelongsTo relations to attributes
-        foreach ($belongsToRelations as $relationInfo) {
-            if (isset($relationInfo['foreign_key'])) {
-                $attributes[$relationInfo['foreign_key']['key']] = $relationInfo['foreign_key']['value'];
-            }
-        }
-
-        // Create/update main model (now with foreign keys from BelongsTo relations)
-        $model = $this->createOrUpdate($mapping->modelClass, $attributes, $mapping->options);
-
-        // If model is null (skipped duplicate), return null
-        if ($model === null) {
-            return null;
-        }
-
-        // Sync other relations (HasOne, HasMany, BelongsToMany, etc.)
-        foreach ($otherRelations as $relationName => $relationInfo) {
-            if (! empty($relationInfo['pivot'])) {
-                $relationInfo['data']['__pivot'] = $relationInfo['pivot'];
-            }
-
-            // Include field transforms for per-value application
-            if (! empty($relationInfo['field_transforms'])) {
-                $relationInfo['data']['__field_transforms'] = $relationInfo['field_transforms'];
-            }
-
-            $this->syncRelation(
-                $model,
-                $relationName,
-                $relationInfo['data'],
-                $mapping->options,
-                $relationInfo['lookup']
-            );
-        }
-
-        // Set BelongsTo relations on model for immediate access
-        $this->setBelongsToRelations($model, $belongsToRelations);
-
-        return $model;
+        // TODO: Re-implement with new mapping system
+        return null;
     }
 
     // ========== Attribute Grouping (consolidated from AttributeGroupingService) ==========
 
     /**
      * Group column mappings into attributes and relations.
+     *
+     * TODO: Re-implement with new mapping system
      */
-    private function groupAttributesAndRelations(Row $row, ModelMapping $mapping, bool $truncateLongFields = true): array
-    {
-        $attributes = [];
-        $relations = [];
-        $truncatedFields = [];
+    // TODO: Re-implement groupAttributesAndRelations with new mapping system
 
-        foreach ($mapping->columns as $columnMapping) {
-            // Extract and transform value
-            $transformedValue = $this->extractValue($row, $columnMapping);
-
-            // Parse path (e.g., "address.street" -> ["address", "street"])
-            $pathParts = explode('.', $columnMapping->targetPath);
-
-            // Validate and truncate string values that exceed column max length (if enabled)
-            if ($truncateLongFields && count($pathParts) === 1 && is_string($transformedValue) && $transformedValue !== '') {
-                $validationResult = $this->validateAndTruncate(
-                    $mapping->modelClass,
-                    $pathParts[0],
-                    $transformedValue
-                );
-
-                $transformedValue = $validationResult['value'];
-                if ($validationResult['truncated'] && $validationResult['details'] !== null) {
-                    $truncatedFields[] = $validationResult['details'];
-                }
-            }
-
-            if (count($pathParts) === 1) {
-                // Direct attribute
-                $attributes[$pathParts[0]] = $transformedValue;
-            } else {
-                // Nested relation
-                $this->addToRelation($relations, $pathParts, $transformedValue, $columnMapping, $mapping);
-            }
-        }
-
-        return [
-            'attributes' => $attributes,
-            'relations' => $relations,
-            'truncatedFields' => $truncatedFields,
-        ];
-    }
-
-    /**
-     * Extract and transform value for a column mapping.
-     */
-    private function extractValue(Row $row, ColumnMapping $columnMapping): mixed
+    // TODO: Re-implement extractValue with new mapping system
+    private function extractValue(Row $row, mixed $columnMapping): mixed
     {
         // Handle virtual source columns (for default values, generated values, etc.)
         if ($this->isVirtualColumn($columnMapping->sourceColumn)) {
@@ -549,7 +459,7 @@ class EloquentLoader
      */
     private function createOrUpdate(string $modelClass, array $attributes, array $options): ?Model
     {
-        $uniqueKey = $options['unique_key'] ?? null;
+        $uniqueKey = $this->normalizeUniqueKey($options['unique_key'] ?? null);
         $duplicateStrategy = $this->parseDuplicateStrategy($options['duplicate_strategy'] ?? 'error');
 
         if ($uniqueKey === null) {
@@ -572,18 +482,22 @@ class EloquentLoader
         }
     }
 
-    private function createWithUniqueKey(string $modelClass, array $attributes, string $uniqueKey, DuplicateStrategy $duplicateStrategy): ?Model
+    private function createWithUniqueKey(string $modelClass, array $attributes, array $uniqueKey, DuplicateStrategy $duplicateStrategy): ?Model
     {
-        $uniqueValue = $attributes[$uniqueKey] ?? null;
+        $query = $modelClass::query();
 
-        if ($uniqueValue === null) {
-            return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
+        foreach ($uniqueKey as $key) {
+            $value = $attributes[$key] ?? null;
+            if ($value === null) {
+                return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
+            }
+            $query->where($key, $value);
         }
 
-        $existing = $modelClass::where($uniqueKey, $uniqueValue)->first();
+        $existing = $query->first();
 
         if ($existing !== null) {
-            return $this->handleExistingRecord($existing, $attributes, $duplicateStrategy, $uniqueKey, $uniqueValue);
+            return $this->handleExistingRecord($existing, $attributes, $duplicateStrategy, $uniqueKey);
         }
 
         return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
@@ -602,13 +516,46 @@ class EloquentLoader
         }
     }
 
-    private function handleExistingRecord(Model $existing, array $attributes, DuplicateStrategy $duplicateStrategy, string $uniqueKey, mixed $uniqueValue): ?Model
+    private function handleExistingRecord(Model $existing, array $attributes, DuplicateStrategy $duplicateStrategy, array $uniqueKey): ?Model
     {
         return match ($duplicateStrategy) {
             DuplicateStrategy::Skip => null,
             DuplicateStrategy::Update => $this->updateModel($existing, $attributes),
-            DuplicateStrategy::Error => throw new \RuntimeException("Duplicate record found for {$uniqueKey}={$uniqueValue}"),
+            DuplicateStrategy::Error => throw new \RuntimeException($this->formatDuplicateErrorMessage($uniqueKey, $attributes)),
         };
+    }
+
+    /**
+     * Format duplicate error message for unique keys.
+     *
+     * @param  array<string>  $uniqueKey  The unique key field names
+     * @param  array<string, mixed>  $attributes  The attributes
+     * @return string Formatted error message
+     */
+    private function formatDuplicateErrorMessage(array $uniqueKey, array $attributes): string
+    {
+        $pairs = [];
+        foreach ($uniqueKey as $key) {
+            $value = $attributes[$key] ?? null;
+            $pairs[] = "{$key}=".($value === null ? 'null' : (string) $value);
+        }
+
+        return 'Duplicate record found for unique key: '.implode(', ', $pairs);
+    }
+
+    /**
+     * Normalize unique key to array format.
+     *
+     * @param  string|array<string>|null  $uniqueKey  The unique key (string, array, or null)
+     * @return array<string>|null Normalized array or null
+     */
+    private function normalizeUniqueKey(string|array|null $uniqueKey): ?array
+    {
+        if ($uniqueKey === null) {
+            return null;
+        }
+
+        return is_array($uniqueKey) ? $uniqueKey : [$uniqueKey];
     }
 
     private function handleDuplicateError(QueryException $e, string $modelClass, array $attributes, DuplicateStrategy $duplicateStrategy): ?Model

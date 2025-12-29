@@ -9,18 +9,15 @@ use InFlow\Enums\File\NewlineFormat;
 use InFlow\Enums\File\SourceType;
 use InFlow\Enums\Flow\ErrorPolicy;
 use InFlow\Enums\UI\MessageType;
-use InFlow\Sanitizers\SanitizerConfigKeys;
 use InFlow\Executors\FlowExecutor;
 use InFlow\Loaders\EloquentLoader;
-use InFlow\Mappings\MappingBuilder;
-use InFlow\Mappings\MappingSerializer;
-use InFlow\Mappings\MappingValidator;
 use InFlow\Presenters\Contracts\PresenterInterface;
 use InFlow\Profilers\Profiler;
 use InFlow\Readers\CsvReader;
 use InFlow\Readers\ExcelReader;
 use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
+use InFlow\Sanitizers\SanitizerConfigKeys;
 use InFlow\Services\Core\ConfigurationResolver;
 use InFlow\Services\Core\FlowExecutionService;
 use InFlow\Services\DataProcessing\SanitizationService;
@@ -37,14 +34,10 @@ use InFlow\Services\Formatter\SchemaFormatter;
 use InFlow\Services\Formatter\StepProgressFormatter;
 use InFlow\Services\Formatter\StepSummaryFormatter;
 use InFlow\Services\Loading\PivotSyncService;
-use InFlow\Services\Mapping\MappingDependencyValidator;
-use InFlow\Services\Mapping\MappingGenerationService;
 use InFlow\Sources\FileSource;
-use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
 use InFlow\ValueObjects\Flow\Flow;
 use InFlow\ValueObjects\Flow\ProcessingContext;
-use InFlow\ValueObjects\Mapping\MappingDefinition;
 
 /**
  * Simplified ETL orchestrator that replaces the pipeline and pipes.
@@ -69,13 +62,8 @@ readonly class ETLOrchestrator
         private SanitizationService $sanitizationService,
         private FormatDetector $formatDetector,
         private Profiler $profiler,
-        private MappingBuilder $mappingBuilder,
-        private MappingSerializer $mappingSerializer,
-        private MappingGenerationService $mappingGenerationService,
         private FlowExecutionService $flowExecutionService,
         private EloquentLoader $eloquentLoader,
-        private MappingValidator $mappingValidator,
-        private MappingDependencyValidator $dependencyValidator,
         private PivotSyncService $pivotSyncService,
         private FormatInfoFormatter $formatInfoFormatter,
         private SchemaFormatter $schemaFormatter,
@@ -129,12 +117,12 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        // Step 6: Profile data (if no mapping provided)
+        // Step 6: Profile data
         $context = $this->profileData($context, $presenter);
 
-        // Step 7: Process mapping
+        // Step 7: Process mapping - TODO: Re-implement mapping system
         $context = $this->processMapping($command, $context, $presenter);
-        if ($context->cancelled || $context->mappingDefinition === null) {
+        if ($context->cancelled) {
             return $context;
         }
 
@@ -361,47 +349,16 @@ readonly class ETLOrchestrator
 
     /**
      * Step 7: Process mapping definition.
+     *
+     * TODO: Re-implement mapping system from scratch
+     * This method should handle the "mappings" section from mapping-template.json
      */
     private function processMapping(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
-        if ($context->reader === null || $context->sourceSchema === null) {
-            $presenter->presentMessage($this->messageFormatter->format('Mapping skipped (no schema available)', MessageType::Warning));
-
-            return $context;
-        }
-
         $presenter->presentStepProgress($this->stepProgressFormatter->format(7, 8, 'Processing mapping...'));
 
-        $mappingDefinition = $this->loadOrGenerateMapping($command, $context->sourceSchema, $presenter);
-
-        if ($mappingDefinition === null) {
-            return $context->withCancelled();
-        }
-
-        $context = $context->withMappingDefinition($mappingDefinition);
-
-        $columnCount = 0;
-        $relationCount = 0;
-        $modelClass = '';
-
-        foreach ($mappingDefinition->mappings as $modelMapping) {
-            $modelClass = $modelMapping->modelClass;
-            foreach ($modelMapping->columns as $column) {
-                if (str_contains($column->targetPath, '.')) {
-                    $relationCount++;
-                } else {
-                    $columnCount++;
-                }
-            }
-        }
-
-        if ($presenter->presentStepSummary($this->stepSummaryFormatter->format('Mapping configuration', [
-            'Model' => class_basename($modelClass),
-            'Direct fields' => (string) $columnCount,
-            'Relation fields' => (string) $relationCount,
-        ]))) {
-            return $context;
-        }
+        // TODO: Implement new mapping system
+        $presenter->presentMessage($this->messageFormatter->format('Mapping system not yet implemented', MessageType::Warning));
 
         return $context->withCancelled();
     }
@@ -411,17 +368,23 @@ readonly class ETLOrchestrator
      */
     private function executeFlow(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
-        if ($context->mappingDefinition === null || $context->reader === null || $context->format === null) {
-            $presenter->presentMessage($this->messageFormatter->format('Flow execution skipped (no mapping available)', MessageType::Warning));
+        if ($context->reader === null || $context->format === null) {
+            $presenter->presentMessage($this->messageFormatter->format('Flow execution skipped (no reader/format available)', MessageType::Warning));
 
             return $context;
         }
+
+        // TODO: Re-implement flow execution with new mapping system
+        $presenter->presentMessage($this->messageFormatter->format('Flow execution requires mapping system', MessageType::Warning));
+
+        return $context;
 
         $presenter->presentStepProgress($this->stepProgressFormatter->format(8, 8, 'Executing ETL flow...'));
         $presenter->presentMessage($this->messageFormatter->format('Importing data into database. Rows are processed in chunks for optimal performance.', MessageType::Info));
 
         // JSON is source of truth, config is fallback
-        $flowConfig = $context->mappingDefinition->flowConfig ?? [];
+        // TODO: Get flow config from new mapping system
+        $flowConfig = [];
 
         // Sanitizer: JSON first, then config, then command option
         $jsonSanitizer = $flowConfig['sanitizer'] ?? null;
@@ -453,7 +416,7 @@ readonly class ETLOrchestrator
             ],
             sanitizerConfig: $shouldSanitize ? $sanitizerConfig : [],
             formatConfig: $formatConfig,
-            mapping: $context->mappingDefinition,
+            mapping: null, // TODO: Replace with new mapping system
             options: [
                 'chunk_size' => $jsonExecution['chunk_size']
                     ?? $this->configResolver->getExecutionConfig('chunk_size', 1000),
@@ -467,12 +430,18 @@ readonly class ETLOrchestrator
             description: 'Flow created from command execution'
         );
 
+        // TODO: Re-implement FlowExecutor with new mapping system
+        $presenter->presentMessage($this->messageFormatter->format('FlowExecutor requires mapping system', MessageType::Warning));
+
+        return $context;
+
+        /* TODO: Re-enable when mapping system is ready
         $executor = new FlowExecutor(
             $this->flowExecutionService,
             $this->profiler,
             $this->eloquentLoader,
-            $this->mappingValidator,
-            $this->dependencyValidator,
+            null, // mappingValidator - TODO: Replace
+            null, // dependencyValidator - TODO: Replace
             $this->pivotSyncService,
             null, // progressCallback
             null  // errorDecisionCallback
@@ -482,8 +451,8 @@ readonly class ETLOrchestrator
         $context = $context->withFlowRun($flowRun);
 
         $presenter->presentFlowRun($this->flowRunFormatter->format($flowRun));
+        */
 
-        return $context;
     }
 
     // Helper methods for file operations
@@ -595,110 +564,6 @@ readonly class ETLOrchestrator
         $normalized = strtolower(trim((string) $value));
 
         return in_array($normalized, ['1', 'true', 'yes', 'y', 'on', 'enabled'], true);
-    }
-
-
-    private function loadOrGenerateMapping(InFlowCommand $command, SourceSchema $sourceSchema, PresenterInterface $presenter): ?MappingDefinition
-    {
-        $mappingPath = $command->option('mapping');
-        $modelClass = $command->argument('to');
-
-        if ($modelClass === null) {
-            $presenter->presentMessage($this->messageFormatter->format('Model class is required. Use: inflow:process file.csv App\\Models\\User', MessageType::Error));
-
-            return null;
-        }
-
-        // If mapping file is explicitly provided, load it
-        if ($mappingPath !== null) {
-            try {
-                $mapping = $this->mappingSerializer->loadFromFile($mappingPath);
-                $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapping loaded from: '.$mappingPath));
-
-                return $mapping;
-            } catch (\Exception $e) {
-                \inflow_report($e, 'error', ['operation' => 'loadMapping', 'path' => $mappingPath]);
-                $presenter->presentMessage($this->messageFormatter->format('Failed to load mapping: '.$e->getMessage(), MessageType::Error));
-
-                return null;
-            }
-        }
-
-        // Try to find existing mapping
-        $existingMappingPath = $this->configResolver->findMappingForModel($modelClass);
-        if ($existingMappingPath !== null && ! $command->isQuiet() && ! $command->option('no-interaction')) {
-            $presenter->presentMessage($this->messageFormatter->format('Found existing mapping: '.$existingMappingPath, MessageType::Info));
-            $useExisting = \Laravel\Prompts\confirm(label: '  Use existing mapping?', default: false, yes: 'y', no: 'n');
-
-            if ($useExisting) {
-                try {
-                    $mapping = $this->mappingSerializer->loadFromFile($existingMappingPath);
-                    $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapping loaded from: '.$existingMappingPath.' (auto-detected)'));
-
-                    return $mapping;
-                } catch (\Exception $e) {
-                    \inflow_report($e, 'warning', ['operation' => 'loadExistingMapping', 'model' => $modelClass]);
-                    $presenter->presentMessage($this->messageFormatter->format('Failed to load existing mapping, generating new one...', MessageType::Warning));
-                }
-            }
-        }
-
-        // Generate new mapping
-        try {
-            $filePath = $command->argument('from');
-            $mapping = $this->mappingBuilder->autoMapInteractive(
-                schema: $sourceSchema,
-                modelClass: $modelClass,
-                interactiveCallback: function ($sourceColumn, $suggestedPath, $confidence, $alternatives, $isRelation = false, $isArrayRelation = false, $columnMeta = null) use ($command) {
-                    // Simplified mapping interaction - delegate to command if needed
-                    if (! is_array($alternatives)) {
-                        $alternatives = [];
-                    }
-
-                    $options = [$suggestedPath => $suggestedPath];
-                    foreach ($alternatives as $alt) {
-                        $options[$alt] = $alt;
-                    }
-
-                    return $command->choice(
-                        "Map '{$sourceColumn}' to:",
-                        $options,
-                        $suggestedPath
-                    );
-                },
-                transformCallback: function ($sourceColumn, $targetPath, $suggestedTransforms, $columnMeta = null, $targetType = null, $modelClass = null) {
-                    // Simplified - just use suggested transforms
-                    // Ensure we always return an array
-                    return is_array($suggestedTransforms) ? $suggestedTransforms : [];
-                }
-            );
-
-            $presenter->presentMessage($this->messageFormatter->format('Mapping generated successfully', MessageType::Success));
-            $columnCount = count($mapping->mappings[0]->columns ?? []);
-            $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapped', columns: $columnCount));
-
-            // Save mapping
-            $saveMappingPath = $this->mappingGenerationService->getMappingSavePath($modelClass);
-            $mappingName = $this->mappingGenerationService->generateMappingName($modelClass, $filePath);
-            $mappingDescription = $this->mappingGenerationService->generateMappingDescription($modelClass, $filePath);
-
-            $mapping = new MappingDefinition(
-                mappings: $mapping->mappings,
-                name: $mappingName,
-                description: $mappingDescription,
-                sourceSchema: $mapping->sourceSchema
-            );
-
-            $this->mappingGenerationService->saveMapping($mapping, $saveMappingPath);
-            $presenter->presentProgressInfo($this->progressInfoFormatter->format('Mapping saved to: '.$saveMappingPath));
-
-            return $mapping;
-        } catch (\Exception $e) {
-            \inflow_report($e, 'error', ['operation' => 'generateMapping', 'model' => $modelClass]);
-            $presenter->presentMessage($this->messageFormatter->format('Failed to generate mapping: '.$e->getMessage(), MessageType::Error));
-
-            return null;
-        }
     }
 
     /**

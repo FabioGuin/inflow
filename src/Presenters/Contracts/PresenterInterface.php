@@ -2,7 +2,6 @@
 
 namespace InFlow\Presenters\Contracts;
 
-use InFlow\ViewModels\ColumnMappingInfoViewModel;
 use InFlow\ViewModels\FileInfoViewModel;
 use InFlow\ViewModels\FlowRunViewModel;
 use InFlow\ViewModels\FormatInfoViewModel;
@@ -36,7 +35,8 @@ interface PresenterInterface
 
     public function presentMessage(MessageViewModel $viewModel): void;
 
-    public function presentColumnMappingInfo(ColumnMappingInfoViewModel $viewModel): void;
+    // TODO: Re-implement presentColumnMappingInfo with new mapping system
+    // public function presentColumnMappingInfo(ColumnMappingInfoViewModel $viewModel): void;
 
     public function presentStepProgress(StepProgressViewModel $viewModel): void;
 

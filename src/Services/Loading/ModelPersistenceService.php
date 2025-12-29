@@ -33,7 +33,7 @@ readonly class ModelPersistenceService
      */
     public function createOrUpdate(string $modelClass, array $attributes, array $options): ?Model
     {
-        $uniqueKey = $options['unique_key'] ?? null;
+        $uniqueKey = $this->normalizeUniqueKey($options['unique_key'] ?? null);
         $duplicateStrategy = $this->parseDuplicateStrategy($options['duplicate_strategy'] ?? 'error');
 
         if ($uniqueKey === null) {
@@ -75,25 +75,29 @@ readonly class ModelPersistenceService
      *
      * @param  class-string<Model>  $modelClass  The model class
      * @param  array<string, mixed>  $attributes  The model attributes
-     * @param  string  $uniqueKey  The unique key field name
+     * @param  array<string>  $uniqueKey  The unique key field names
      * @param  DuplicateStrategy  $duplicateStrategy  The duplicate strategy
      * @return Model|null Returns null if duplicate strategy is 'skip' and duplicate found
      *
      * @throws \RuntimeException If duplicate strategy is 'error' and duplicate found
      * @throws QueryException If database error occurs
      */
-    private function createWithUniqueKey(string $modelClass, array $attributes, string $uniqueKey, DuplicateStrategy $duplicateStrategy): ?Model
+    private function createWithUniqueKey(string $modelClass, array $attributes, array $uniqueKey, DuplicateStrategy $duplicateStrategy): ?Model
     {
-        $uniqueValue = $attributes[$uniqueKey] ?? null;
+        $query = $modelClass::query();
 
-        if ($uniqueValue === null) {
-            return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
+        foreach ($uniqueKey as $key) {
+            $value = $attributes[$key] ?? null;
+            if ($value === null) {
+                return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
+            }
+            $query->where($key, $value);
         }
 
-        $existing = $modelClass::where($uniqueKey, $uniqueValue)->first();
+        $existing = $query->first();
 
         if ($existing !== null) {
-            return $this->handleExistingRecord($existing, $attributes, $duplicateStrategy, $uniqueKey, $uniqueValue);
+            return $this->handleExistingRecord($existing, $attributes, $duplicateStrategy, $uniqueKey);
         }
 
         return $this->createNewModel($modelClass, $attributes, $duplicateStrategy);
@@ -132,19 +136,51 @@ readonly class ModelPersistenceService
      * @param  Model  $existing  The existing model
      * @param  array<string, mixed>  $attributes  The new attributes
      * @param  DuplicateStrategy  $duplicateStrategy  The duplicate strategy
-     * @param  string  $uniqueKey  The unique key field name
-     * @param  mixed  $uniqueValue  The unique key value
+     * @param  array<string>  $uniqueKey  The unique key field names
      * @return Model|null Returns null if duplicate strategy is 'skip'
      *
      * @throws \RuntimeException If duplicate strategy is 'error'
      */
-    private function handleExistingRecord(Model $existing, array $attributes, DuplicateStrategy $duplicateStrategy, string $uniqueKey, mixed $uniqueValue): ?Model
+    private function handleExistingRecord(Model $existing, array $attributes, DuplicateStrategy $duplicateStrategy, array $uniqueKey): ?Model
     {
         return match ($duplicateStrategy) {
             DuplicateStrategy::Skip => null,
             DuplicateStrategy::Update => $this->updateModel($existing, $attributes),
-            DuplicateStrategy::Error => throw new \RuntimeException("Duplicate record found for {$uniqueKey}={$uniqueValue}"),
+            DuplicateStrategy::Error => throw new \RuntimeException($this->formatDuplicateErrorMessage($uniqueKey, $attributes)),
         };
+    }
+
+    /**
+     * Format duplicate error message for unique keys.
+     *
+     * @param  array<string>  $uniqueKey  The unique key field names
+     * @param  array<string, mixed>  $attributes  The attributes
+     * @return string Formatted error message
+     */
+    private function formatDuplicateErrorMessage(array $uniqueKey, array $attributes): string
+    {
+        $pairs = [];
+        foreach ($uniqueKey as $key) {
+            $value = $attributes[$key] ?? null;
+            $pairs[] = "{$key}=".($value === null ? 'null' : (string) $value);
+        }
+
+        return 'Duplicate record found for unique key: '.implode(', ', $pairs);
+    }
+
+    /**
+     * Normalize unique key to array format.
+     *
+     * @param  string|array<string>|null  $uniqueKey  The unique key (string, array, or null)
+     * @return array<string>|null Normalized array or null
+     */
+    private function normalizeUniqueKey(string|array|null $uniqueKey): ?array
+    {
+        if ($uniqueKey === null) {
+            return null;
+        }
+
+        return is_array($uniqueKey) ? $uniqueKey : [$uniqueKey];
     }
 
     /**
