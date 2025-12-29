@@ -260,16 +260,14 @@ class EloquentLoader
         $relations[$relationName]['data']['__array_data'] = $transformedValue;
         $relations[$relationName]['data']['__full_array'] = true;
 
-        // Configure lookup if present in column mapping
-        if ($columnMapping->relationLookup !== null) {
-            $this->configureLookup(
-                $relations[$relationName],
-                $columnMapping,
-                $relationName,
-                '*',
-                $mapping
-            );
-        }
+        // Configure lookup automatically based on relation type
+        $this->configureLookup(
+            $relations[$relationName],
+            $columnMapping,
+            $relationName,
+            '*',
+            $mapping
+        );
     }
 
     private function handlePivotMapping(
@@ -357,7 +355,7 @@ class EloquentLoader
     }
 
     /**
-     * Configure relation lookup.
+     * Configure relation lookup automatically based on relation type.
      */
     private function configureLookup(
         array &$relationInfo,
@@ -366,18 +364,6 @@ class EloquentLoader
         string $relationAttribute,
         ModelMapping $mapping
     ): void {
-        // If relationLookup is explicitly configured, use it
-        if ($columnMapping->relationLookup !== null) {
-            $relationInfo['lookup'] = [
-                'column' => $columnMapping,
-                'field' => $columnMapping->relationLookup['field'] ?? $relationAttribute,
-                'create_if_missing' => $columnMapping->relationLookup['create_if_missing'] ?? false,
-                'delimiter' => $columnMapping->relationLookup['delimiter'] ?? null,
-            ];
-
-            return;
-        }
-
         // Auto-detect based on relation type
         $relationType = $this->relationTypeService->getRelationType($mapping->modelClass, $relationName);
 

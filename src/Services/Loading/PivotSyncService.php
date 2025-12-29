@@ -76,7 +76,6 @@ readonly class PivotSyncService
                     $parentLookup = [
                         'field' => $parentField,
                         'value' => $this->extractAndTransformValue($row, $column),
-                        'lookup' => $column->relationLookup,
                     ];
                 }
 
@@ -90,7 +89,6 @@ readonly class PivotSyncService
                     $relatedLookup = [
                         'field' => $relatedField,
                         'value' => $this->extractAndTransformValue($row, $column),
-                        'lookup' => $column->relationLookup,
                     ];
                 }
             }
@@ -101,7 +99,7 @@ readonly class PivotSyncService
         }
 
         // Find parent model
-        $parentModel = $this->findModel($parentModelClass, $parentLookup['field'], $parentLookup['value'], $parentLookup['lookup']);
+        $parentModel = $this->findModel($parentModelClass, $parentLookup['field'], $parentLookup['value']);
         if ($parentModel === null) {
             return;
         }
@@ -117,8 +115,7 @@ readonly class PivotSyncService
         $relatedModel = $this->findModel(
             $relatedModelClass,
             $relatedLookup['field'],
-            $relatedLookup['value'],
-            $relatedLookup['lookup']
+            $relatedLookup['value']
         );
 
         if ($relatedModel === null) {
@@ -133,20 +130,13 @@ readonly class PivotSyncService
     /**
      * Find model by lookup field and value.
      */
-    private function findModel(string $modelClass, string $field, mixed $value, ?array $lookup): ?Model
+    private function findModel(string $modelClass, string $field, mixed $value): ?Model
     {
         if ($value === null || $value === '') {
             return null;
         }
 
-        $model = $modelClass::where($field, $value)->first();
-
-        if ($model === null && ($lookup['create_if_missing'] ?? false)) {
-            $createData = [$field => $value];
-            $model = $modelClass::firstOrCreate([$field => $value], $createData);
-        }
-
-        return $model;
+        return $modelClass::where($field, $value)->first();
     }
 
     /**
