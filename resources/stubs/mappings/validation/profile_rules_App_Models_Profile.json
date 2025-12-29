@@ -1,126 +1,122 @@
 {
-    "name": "",
-    "description": null,
+    "name": ""
+    "description": null
     "source_schema": {
         "columns": {
             "author_email": {
-                "name": "author_email",
-                "type": "email",
-                "null_count": 0,
-                "unique_count": 8,
-                "min": null,
-                "max": null,
+                "name": "author_email"
+                "type": "email"
+                "null_count": 0
+                "unique_count": 8
+                "min": null
+                "max": null
                 "examples": [
-                    "profile1@test.com",
-                    "profile2@test.com",
-                    "profile3@test.com",
-                    "profile4@test.com",
+                    "profile1@test.com"
+                    "profile2@test.com"
+                    "profile3@test.com"
+                    "profile4@test.com"
                     "unknown@nowhere.com"
                 ]
-            },
+            }
             "bio": {
-                "name": "bio",
-                "type": "string",
-                "null_count": 1,
-                "unique_count": 7,
-                "min": null,
-                "max": null,
+                "name": "bio"
+                "type": "string"
+                "null_count": 1
+                "unique_count": 7
+                "min": null
+                "max": null
                 "examples": [
-                    "A short valid bio",
-                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. This bio is intentionally over 1000 characters to test max length validation rule and should fail.",
-                    "Bio with invalid website",
-                    "Bio for unknown author",
+                    "A short valid bio"
+                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. This bio is intentionally over 1000 characters to test max length validation rule and should fail."
+                    "Bio with invalid website"
+                    "Bio for unknown author"
                     "Valid bio"
                 ]
-            },
+            }
             "website": {
-                "name": "website",
-                "type": "url",
-                "null_count": 2,
-                "unique_count": 6,
-                "min": null,
-                "max": null,
+                "name": "website"
+                "type": "url"
+                "null_count": 2
+                "unique_count": 6
+                "min": null
+                "max": null
                 "examples": [
-                    "https://valid-website.com",
-                    "https://toolong.com",
-                    "not-a-valid-url",
-                    "ftp://wrong-protocol.com",
+                    "https://valid-website.com"
+                    "https://toolong.com"
+                    "not-a-valid-url"
+                    "ftp://wrong-protocol.com"
                     "https://unknown.com"
                 ]
-            },
+            }
             "verified_at": {
-                "name": "verified_at",
-                "type": "date",
-                "null_count": 4,
-                "unique_count": 4,
-                "min": "2023-06-01",
-                "max": "2024-12-01",
+                "name": "verified_at"
+                "type": "date"
+                "null_count": 4
+                "unique_count": 4
+                "min": "2023-06-01"
+                "max": "2024-12-01"
                 "examples": [
-                    "2024-01-15 10:30:00",
-                    "2023-06-01 08:00:00",
-                    "invalid-date-format",
+                    "2024-01-15 10:30:00"
+                    "2023-06-01 08:00:00"
+                    "invalid-date-format"
                     "2024-12-01 00:00:00"
                 ]
             }
-        },
+        }
         "total_rows": 8
-    },
+    }
     "mappings": [
         {
-            "model": "App\\Models\\Profile",
+            "model": "App\\Models\\Profile"
             "columns": [
                 {
-                    "source": "author_email",
-                    "target": "author.email",
+                    "source": "author_email"
+                    "target": "author.email"
                     "transforms": [
-                        "trim",
+                        "trim"
                         "lower"
-                    ],
-                    "default": null,
-                    "validation_rule": null,
-                    "relation_lookup": {
-                        "field": "email",
+                    ]
+                    "default": null
+                    "validation_rule": null
+                        "field": "email"
                         "create_if_missing": false
                     }
-                },
-                {
-                    "source": "bio",
-                    "target": "bio",
-                    "transforms": [
-                        "trim"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|string|max:1000",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "website",
-                    "target": "website",
-                    "transforms": [
-                        "trim"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|url|max:255",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "verified_at",
-                    "target": "verified_at",
-                    "transforms": [
-                        "trim",
-                        "cast:date"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|date",
-                    "relation_lookup": null
                 }
-            ],
+                {
+                    "source": "bio"
+                    "target": "bio"
+                    "transforms": [
+                        "trim"
+                    ]
+                    "default": null
+                    "validation_rule": "nullable|string|max:1000"
+                }
+                {
+                    "source": "website"
+                    "target": "website"
+                    "transforms": [
+                        "trim"
+                    ]
+                    "default": null
+                    "validation_rule": "nullable|url|max:255"
+                }
+                {
+                    "source": "verified_at"
+                    "target": "verified_at"
+                    "transforms": [
+                        "trim"
+                        "cast:date"
+                    ]
+                    "default": null
+                    "validation_rule": "nullable|date"
+                }
+            ]
             "options": {
-                "unique_key": "id",
+                "unique_key": "id"
                 "duplicate_strategy": "update"
             }
         }
-    ],
-    "created_at": "2025-12-18T21:47:42+00:00",
+    ]
+    "created_at": "2025-12-18T21:47:42+00:00"
     "updated_at": "2025-12-18T21:47:42+00:00"
 }

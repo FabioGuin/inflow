@@ -1,102 +1,99 @@
 {
-    "name": "Special Characters Edge Cases Test",
-    "description": "Test mapping for handling special characters: unicode, emojis, quotes, backslashes, HTML, newlines, null bytes",
+    "name": "Special Characters Edge Cases Test"
+    "description": "Test mapping for handling special characters: unicode, emojis, quotes, backslashes, HTML, newlines, null bytes"
     "source_schema": {
         "columns": {
             "name": {
-                "name": "name",
-                "type": "string",
-                "null_count": 0,
-                "unique_count": 10,
+                "name": "name"
+                "type": "string"
+                "null_count": 0
+                "unique_count": 10
                 "examples": [
-                    "José García",
-                    "François Müller",
+                    "José García"
+                    "François Müller"
                     "日本語 Author"
                 ]
-            },
+            }
             "email": {
-                "name": "email",
-                "type": "email",
-                "null_count": 0,
-                "unique_count": 10,
+                "name": "email"
+                "type": "email"
+                "null_count": 0
+                "unique_count": 10
                 "examples": [
-                    "jose@test.com",
-                    "francois@test.com",
+                    "jose@test.com"
+                    "francois@test.com"
                     "japanese@test.com"
                 ]
-            },
+            }
             "country": {
-                "name": "country",
-                "type": "string",
-                "null_count": 0,
-                "unique_count": 10,
+                "name": "country"
+                "type": "string"
+                "null_count": 0
+                "unique_count": 10
                 "examples": [
-                    "España",
-                    "Français",
+                    "España"
+                    "Français"
                     "日本"
                 ]
-            },
+            }
             "bio": {
-                "name": "bio",
-                "type": "string",
-                "null_count": 0,
-                "unique_count": 10,
+                "name": "bio"
+                "type": "string"
+                "null_count": 0
+                "unique_count": 10
                 "examples": [
-                    "Escritor español con ñ y acentos: áéíóú",
-                    "German umlauts: äöüß and French: çèê",
+                    "Escritor español con ñ y acentos: áéíóú"
+                    "German umlauts: äöüß and French: çèê"
                     "Japanese text: こんにちは世界"
                 ]
             }
-        },
+        }
         "total_rows": 10
-    },
+    }
     "mappings": [
         {
-            "model": "App\\Models\\Author",
+            "model": "App\\Models\\Author"
             "columns": [
                 {
-                    "source": "name",
-                    "target": "name",
+                    "source": "name"
+                    "target": "name"
                     "transforms": [
-                        "trim",
+                        "trim"
                         "clean_whitespace"
-                    ],
-                    "default": null,
-                    "validation_rule": "required|string|min:2|max:100",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "email",
-                    "target": "email",
-                    "transforms": [
-                        "trim",
-                        "lower"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|email|unique:authors,email",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "country",
-                    "target": "country",
-                    "transforms": [
-                        "trim",
-                        "upper",
-                        "truncate:2",
-                        "null_if_empty"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|string|size:2|alpha",
-                    "relation_lookup": null
+                    ]
+                    "default": null
+                    "validation_rule": "required|string|min:2|max:100"
                 }
-            ],
+                {
+                    "source": "email"
+                    "target": "email"
+                    "transforms": [
+                        "trim"
+                        "lower"
+                    ]
+                    "default": null
+                    "validation_rule": "nullable|email|unique:authors,email"
+                }
+                {
+                    "source": "country"
+                    "target": "country"
+                    "transforms": [
+                        "trim"
+                        "upper"
+                        "truncate:2"
+                        "null_if_empty"
+                    ]
+                    "default": null
+                    "validation_rule": "nullable|string|size:2|alpha"
+                }
+            ]
             "options": {
-                "unique_key": "email",
+                "unique_key": "email"
                 "duplicate_strategy": "update"
             }
         }
-    ],
-    "created_at": "2025-12-18T15:00:00+00:00",
+    ]
+    "created_at": "2025-12-18T15:00:00+00:00"
     "updated_at": "2025-12-18T15:00:00+00:00"
 }
 

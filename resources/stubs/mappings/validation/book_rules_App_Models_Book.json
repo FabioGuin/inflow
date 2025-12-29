@@ -1,153 +1,147 @@
 {
-    "name": "Book Validation Rules Test",
-    "description": "Test mapping for Book model validation rules",
+    "name": "Book Validation Rules Test"
+    "description": "Test mapping for Book model validation rules"
     "source_schema": {
         "columns": {
             "title": {
-                "name": "title",
-                "type": "string",
-                "null_count": 1,
-                "unique_count": 9,
+                "name": "title"
+                "type": "string"
+                "null_count": 1
+                "unique_count": 9
                 "examples": [
-                    "Valid Book",
-                    "Invalid ISBN Format",
+                    "Valid Book"
+                    "Invalid ISBN Format"
                     "ISBN Too Short"
                 ]
-            },
+            }
             "isbn": {
-                "name": "isbn",
-                "type": "string",
-                "null_count": 0,
-                "unique_count": 9,
+                "name": "isbn"
+                "type": "string"
+                "null_count": 0
+                "unique_count": 9
                 "examples": [
-                    "978-1234567890",
-                    "123-4567890123",
+                    "978-1234567890"
+                    "123-4567890123"
                     "978-123"
                 ]
-            },
+            }
             "price": {
-                "name": "price",
-                "type": "float",
-                "null_count": 0,
-                "unique_count": 10,
+                "name": "price"
+                "type": "float"
+                "null_count": 0
+                "unique_count": 10
                 "examples": [
-                    "19.99",
-                    "15.99",
+                    "19.99"
+                    "15.99"
                     "-5"
                 ]
-            },
+            }
             "published_at": {
-                "name": "published_at",
-                "type": "date",
-                "null_count": 0,
-                "unique_count": 10,
+                "name": "published_at"
+                "type": "date"
+                "null_count": 0
+                "unique_count": 10
                 "examples": [
-                    "2023-01-15",
-                    "2022-06-20",
+                    "2023-01-15"
+                    "2022-06-20"
                     "2099-12-31"
                 ]
-            },
+            }
             "is_active": {
-                "name": "is_active",
-                "type": "boolean",
-                "null_count": 1,
-                "unique_count": 2,
+                "name": "is_active"
+                "type": "boolean"
+                "null_count": 1
+                "unique_count": 2
                 "examples": [
-                    "true",
-                    "false",
+                    "true"
+                    "false"
                     ""
                 ]
-            },
+            }
             "author_email": {
-                "name": "author_email",
-                "type": "email",
-                "null_count": 0,
-                "unique_count": 2,
+                "name": "author_email"
+                "type": "email"
+                "null_count": 0
+                "unique_count": 2
                 "examples": [
-                    "author1@test.com",
+                    "author1@test.com"
                     "unknown@nowhere.com"
                 ]
             }
-        },
+        }
         "total_rows": 10
-    },
+    }
     "mappings": [
         {
-            "model": "App\\Models\\Book",
+            "model": "App\\Models\\Book"
             "columns": [
                 {
-                    "source": "title",
-                    "target": "title",
+                    "source": "title"
+                    "target": "title"
                     "transforms": [
                         "trim"
-                    ],
-                    "default": null,
-                    "validation_rule": "required|string|min:1|max:255",
-                    "relation_lookup": null
-                },
+                    ]
+                    "default": null
+                    "validation_rule": "required|string|min:1|max:255"
+                }
                 {
-                    "source": "isbn",
-                    "target": "isbn",
+                    "source": "isbn"
+                    "target": "isbn"
                     "transforms": [
                         "trim"
-                    ],
-                    "default": null,
-                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn",
-                    "relation_lookup": null
-                },
+                    ]
+                    "default": null
+                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn"
+                }
                 {
-                    "source": "price",
-                    "target": "price",
+                    "source": "price"
+                    "target": "price"
                     "transforms": [
                         "trim"
-                    ],
-                    "default": null,
-                    "validation_rule": "required|numeric|min:0|max:9999.99",
-                    "relation_lookup": null
-                },
+                    ]
+                    "default": null
+                    "validation_rule": "required|numeric|min:0|max:9999.99"
+                }
                 {
-                    "source": "published_at",
-                    "target": "published_at",
+                    "source": "published_at"
+                    "target": "published_at"
                     "transforms": [
                         "trim"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|date|before_or_equal:today",
-                    "relation_lookup": null
-                },
+                    ]
+                    "default": null
+                    "validation_rule": "nullable|date|before_or_equal:today"
+                }
                 {
-                    "source": "is_active",
-                    "target": "is_active",
+                    "source": "is_active"
+                    "target": "is_active"
                     "transforms": [
-                        "trim",
+                        "trim"
                         "cast:bool"
-                    ],
-                    "default": null,
-                    "validation_rule": "boolean",
-                    "relation_lookup": null
-                },
+                    ]
+                    "default": null
+                    "validation_rule": "boolean"
+                }
                 {
-                    "source": "author_email",
-                    "target": "author.email",
+                    "source": "author_email"
+                    "target": "author.email"
                     "transforms": [
-                        "trim",
+                        "trim"
                         "lower"
-                    ],
-                    "default": null,
-                    "validation_rule": null,
-                    "relation_lookup": {
-                        "field": "email",
+                    ]
+                    "default": null
+                    "validation_rule": null
+                        "field": "email"
                         "create_if_missing": false
                     }
                 }
-            ],
+            ]
             "options": {
-                "unique_key": "isbn",
+                "unique_key": "isbn"
                 "duplicate_strategy": "update"
             }
         }
-    ],
-    "created_at": "2025-12-18T15:00:00+00:00",
+    ]
+    "created_at": "2025-12-18T15:00:00+00:00"
     "updated_at": "2025-12-18T15:00:00+00:00"
 }
 

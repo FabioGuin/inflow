@@ -1,75 +1,69 @@
 {
-    "name": "HasMany Relation Test",
-    "description": "Test mapping for Author hasMany Books relation",
+    "name": "HasMany Relation Test"
+    "description": "Test mapping for Author hasMany Books relation"
     "source_schema": {
         "columns": {
-            "name": {"name": "name", "type": "string"},
-            "email": {"name": "email", "type": "email"},
-            "country": {"name": "country", "type": "string"},
+            "name": {"name": "name", "type": "string"}
+            "email": {"name": "email", "type": "email"}
+            "country": {"name": "country", "type": "string"}
             "books": {"name": "books", "type": "array"}
-        },
+        }
         "total_rows": 5
-    },
+    }
     "mappings": [
         {
-            "model": "App\\Models\\Author",
+            "model": "App\\Models\\Author"
             "columns": [
                 {
-                    "source": "name",
-                    "target": "name",
-                    "transforms": ["trim"],
-                    "default": null,
-                    "validation_rule": "required|string|min:2|max:100",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "email",
-                    "target": "email",
-                    "transforms": ["trim", "lower"],
-                    "default": null,
-                    "validation_rule": "required|email|unique:authors,email",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "country",
-                    "target": "country",
-                    "transforms": ["trim"],
-                    "default": null,
-                    "validation_rule": "nullable|string|size:2|alpha",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "books.*.title",
-                    "target": "books.*.title",
-                    "transforms": ["trim"],
-                    "default": null,
-                    "validation_rule": "required|string|min:1|max:255",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "books.*.isbn",
-                    "target": "books.*.isbn",
-                    "transforms": ["trim"],
-                    "default": null,
-                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "books.*.price",
-                    "target": "books.*.price",
-                    "transforms": ["trim"],
-                    "default": null,
-                    "validation_rule": "required|numeric|min:0|max:9999.99",
-                    "relation_lookup": null
+                    "source": "name"
+                    "target": "name"
+                    "transforms": ["trim"]
+                    "default": null
+                    "validation_rule": "required|string|min:2|max:100"
                 }
-            ],
+                {
+                    "source": "email"
+                    "target": "email"
+                    "transforms": ["trim", "lower"]
+                    "default": null
+                    "validation_rule": "required|email|unique:authors,email"
+                }
+                {
+                    "source": "country"
+                    "target": "country"
+                    "transforms": ["trim"]
+                    "default": null
+                    "validation_rule": "nullable|string|size:2|alpha"
+                }
+                {
+                    "source": "books.*.title"
+                    "target": "books.*.title"
+                    "transforms": ["trim"]
+                    "default": null
+                    "validation_rule": "required|string|min:1|max:255"
+                }
+                {
+                    "source": "books.*.isbn"
+                    "target": "books.*.isbn"
+                    "transforms": ["trim"]
+                    "default": null
+                    "validation_rule": "required|string|regex:/^97[89]-\\d{10}$/|unique:books,isbn"
+                }
+                {
+                    "source": "books.*.price"
+                    "target": "books.*.price"
+                    "transforms": ["trim"]
+                    "default": null
+                    "validation_rule": "required|numeric|min:0|max:9999.99"
+                }
+            ]
             "options": {
-                "unique_key": "email",
+                "unique_key": "email"
                 "duplicate_strategy": "update"
             }
         }
-    ],
-    "created_at": "2025-12-18T22:00:00+00:00",
+    ]
+    "created_at": "2025-12-18T22:00:00+00:00"
     "updated_at": "2025-12-18T22:00:00+00:00"
 }
 

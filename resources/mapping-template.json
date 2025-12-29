@@ -1,7 +1,7 @@
 {
     "version": "1.0",
     "name": "Complete Mapping Template",
-    "description": "Template completo per mapping InFlow ETL con tutte le opzioni disponibili",
+    "description": "Template completo per mapping InFlow ETL con tutte le opzioni disponibili. IMPORTANTE: Segui la filosofia 'Model-First' - preferisci cast, accessor e mutator nel modello invece di trasformazioni nel mapping.",
     "source_schema": {
         "columns": {
             "example_string_column": {
@@ -149,91 +149,103 @@
     },
     "mappings": [
         {
+            "_comment": "=== STRATEGIA RELAZIONI === Prima mappare i campi diretti del modello root (execution_order: 1), poi le relazioni in ordine di dipendenza. Il modello root è quello senza BelongsTo o con BelongsTo nullable.",
             "model": "App\\Models\\ExampleModel",
             "execution_order": 1,
             "type": "model",
             "columns": [
                 {
+                    "_comment": "Esempio: campo semplice con solo pulizia base. Se il modello ha mutator setEmailAttribute() che fa trim/lower, rimuovi questi transforms. Default: null è corretto se la colonna è nullable o ha default nella migration. Se il modello ha rules() con 'name' => 'required|string|min:2|max:100', NON serve validation_rule qui - il modello gestisce già la validazione.",
                     "source": "example_string_column",
                     "target": "name",
-                    "transforms": [
-                        "trim",
-                        "lower"
-                    ],
-                    "default": null,
-                    "validation_rule": "required|string|min:2|max:100",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "example_email_column",
-                    "target": "email",
-                    "transforms": [
-                        "trim",
-                        "lower"
-                    ],
-                    "default": null,
-                    "validation_rule": "required|email|unique:users,email",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "example_numeric_column",
-                    "target": "price",
-                    "transforms": [
-                        "trim",
-                        "cast:decimal:2"
-                    ],
-                    "default": 0.0,
-                    "validation_rule": "required|numeric|min:0|max:9999.99",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "example_date_column",
-                    "target": "published_at",
-                    "transforms": [
-                        "trim",
-                        "cast:date"
-                    ],
-                    "default": null,
-                    "validation_rule": "nullable|date|before_or_equal:today",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "example_boolean_column",
-                    "target": "is_active",
-                    "transforms": [
-                        "trim",
-                        "cast:bool"
-                    ],
-                    "default": false,
-                    "validation_rule": "boolean",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "example_nested_column",
-                    "target": "relation.field",
                     "transforms": [
                         "trim"
                     ],
                     "default": null,
-                    "validation_rule": "nullable|string|max:255",
-                    "relation_lookup": {
-                        "field": "name",
-                        "create_if_missing": false
-                    }
+                    "validation_rule": null
                 },
                 {
-                    "source": "example_json_column",
-                    "target": "items.*.name",
+                    "_comment": "Esempio: email. Se il modello ha mutator setEmailAttribute() che normalizza, rimuovi 'lower' da transforms. Se il modello ha rules() con 'email' => 'required|email|unique:users,email', NON serve validation_rule qui. Preferisci sempre cast/mutator/rules nel modello.",
+                    "source": "example_email_column",
+                    "target": "email",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: prezzo. Se il modello ha cast 'price' => 'decimal:2', NON serve 'cast:decimal:2' qui. Se la migration ha ->default(0), NON serve 'default: 0.0' qui. Se il modello ha rules() con 'price' => 'required|numeric|min:0|max:9999.99', NON serve validation_rule qui. Il modello gestisce già tutto.",
+                    "source": "example_numeric_column",
+                    "target": "price",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: data. Se il modello ha cast 'published_at' => 'date', NON serve 'cast:date' qui. Se il modello ha rules() con 'published_at' => 'nullable|date|before_or_equal:today', NON serve validation_rule qui. Usa transforms/validation_rule solo per pulizia base o casi ETL-specifici.",
+                    "source": "example_date_column",
+                    "target": "published_at",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: boolean. Se il modello ha cast 'is_active' => 'boolean', NON serve 'cast:bool' qui. Se la migration ha ->default(true), NON serve 'default: false' qui. Se il modello ha rules() con 'is_active' => 'boolean', NON serve validation_rule qui. Il modello gestisce già tutto.",
+                    "source": "example_boolean_column",
+                    "target": "is_active",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: HasOne (es. Author → Profile). Profile viene creato DOPO Author (execution_order: 2). Il target 'profile.bio' indica relazione HasOne. Non serve relation_lookup perché Author è già creato quando si processa Profile.",
+                    "source": "profile_bio",
+                    "target": "profile.bio",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: HasMany con JSON (es. Author → Books). Books vengono creati DOPO Author (execution_order: 2). json_decode converte stringa JSON in array. Il target 'books.*.title' indica relazione HasMany. author_id viene impostato automaticamente.",
+                    "source": "books_json",
+                    "target": "books.*.title",
                     "transforms": [
                         "trim",
                         "json_decode"
                     ],
                     "default": null,
-                    "validation_rule": "nullable|array",
-                    "relation_lookup": {
-                        "field": "name",
-                        "create_if_missing": true
-                    }
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: trasformazione cross-field ETL-specifica. Questo è un caso valido per transforms: concat combina più colonne sorgente. Se il modello ha rules() con 'full_name' => 'nullable|string|max:255', NON serve validation_rule qui.",
+                    "source": "__concat_first_last",
+                    "target": "full_name",
+                    "transforms": [
+                        "concat:first_name,\" \",last_name",
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                },
+                {
+                    "_comment": "Esempio: default nel mapping come fallback. Usa solo se la migration NON ha ->default() e il campo è required. Se la migration ha ->default('N/A'), NON serve qui. Se il modello ha rules() con 'status' => 'required|string|in:pending,active,inactive', NON serve validation_rule qui - usa solo come fallback se non definito nel modello.",
+                    "source": "status_column",
+                    "target": "status",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": "pending",
+                    "validation_rule": null,
+                    "relation_lookup": null
                 }
             ],
             "options": {
@@ -242,33 +254,30 @@
             }
         },
         {
+            "_comment": "=== ESEMPIO: Modello con BelongsTo (es. Book → Author) === Book richiede Author esistente. Se Author è execution_order: 1, Book può essere execution_order: 2. Il target 'author.email' indica BelongsTo. Il sistema risolve automaticamente author_id cercando Author per email.",
             "model": "App\\Models\\RelatedModel",
             "execution_order": 2,
             "type": "model",
             "columns": [
                 {
-                    "source": "example_string_column",
-                    "target": "parent.email",
+                    "_comment": "Esempio: BelongsTo (es. Book → Author). Book richiede Author esistente (execution_order: 1). Il target 'author.email' indica lookup per email. Il sistema risolve author_id automaticamente.",
+                    "source": "author_email",
+                    "target": "author.email",
                     "transforms": [
-                        "trim",
-                        "lower"
+                        "trim"
                     ],
                     "default": null,
-                    "validation_rule": null,
-                    "relation_lookup": {
-                        "field": "email",
-                        "create_if_missing": false
-                    }
+                    "validation_rule": null
                 },
                 {
+                    "_comment": "Esempio: campo diretto del modello. Solo pulizia base. La logica di trasformazione e validazione dovrebbe essere nel modello.",
                     "source": "example_nested_column",
                     "target": "field",
                     "transforms": [
                         "trim"
                     ],
                     "default": null,
-                    "validation_rule": "required|string|max:255",
-                    "relation_lookup": null
+                    "validation_rule": null
                 }
             ],
             "options": {
@@ -277,6 +286,28 @@
                     "field"
                 ],
                 "duplicate_strategy": "skip"
+            }
+        },
+        {
+            "_comment": "=== ESEMPIO: BelongsToMany (es. Book → Tags) === Richiede Book E Tag esistenti. Se Book è execution_order: 2 e Tag è execution_order: 3, la relazione viene sincronizzata dopo. Il target 'tags.*.name' indica BelongsToMany. Il sistema crea Tag se non esistono e li collega via pivot.",
+            "model": "App\\Models\\Tag",
+            "execution_order": 3,
+            "type": "model",
+            "columns": [
+                {
+                    "_comment": "Esempio: BelongsToMany (es. Book → Tags). Tag viene creato DOPO Book (execution_order: 3). Il target 'tags.*.name' indica relazione BelongsToMany. Il sistema crea Tag se non esiste e lo collega via pivot table.",
+                    "source": "tag_name",
+                    "target": "tags.*.name",
+                    "transforms": [
+                        "trim"
+                    ],
+                    "default": null,
+                    "validation_rule": null
+                }
+            ],
+            "options": {
+                "unique_key": "slug",
+                "duplicate_strategy": "update"
             }
         }
     ],

@@ -1,50 +1,47 @@
 {
-    "name": "Missing Required Fields Test",
-    "description": "Test mapping for missing required fields validation",
+    "name": "Missing Required Fields Test"
+    "description": "Test mapping for missing required fields validation"
     "source_schema": {
         "columns": {
-            "name": {"name": "name", "type": "string"},
-            "email": {"name": "email", "type": "email"},
+            "name": {"name": "name", "type": "string"}
+            "email": {"name": "email", "type": "email"}
             "country": {"name": "country", "type": "string"}
-        },
+        }
         "total_rows": 10
-    },
+    }
     "mappings": [
         {
-            "model": "App\\Models\\Author",
+            "model": "App\\Models\\Author"
             "columns": [
                 {
-                    "source": "name",
-                    "target": "name",
-                    "transforms": ["trim"],
-                    "default": null,
-                    "validation_rule": "required|string|min:2|max:100",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "email",
-                    "target": "email",
-                    "transforms": ["trim", "lower"],
-                    "default": null,
-                    "validation_rule": "required|email|unique:authors,email",
-                    "relation_lookup": null
-                },
-                {
-                    "source": "country",
-                    "target": "country",
-                    "transforms": ["trim", "upper", "truncate:2"],
-                    "default": null,
-                    "validation_rule": "nullable|string|size:2|alpha",
-                    "relation_lookup": null
+                    "source": "name"
+                    "target": "name"
+                    "transforms": ["trim"]
+                    "default": null
+                    "validation_rule": "required|string|min:2|max:100"
                 }
-            ],
+                {
+                    "source": "email"
+                    "target": "email"
+                    "transforms": ["trim", "lower"]
+                    "default": null
+                    "validation_rule": "required|email|unique:authors,email"
+                }
+                {
+                    "source": "country"
+                    "target": "country"
+                    "transforms": ["trim", "upper", "truncate:2"]
+                    "default": null
+                    "validation_rule": "nullable|string|size:2|alpha"
+                }
+            ]
             "options": {
-                "unique_key": "email",
+                "unique_key": "email"
                 "duplicate_strategy": "update"
             }
         }
-    ],
-    "created_at": "2025-12-18T22:00:00+00:00",
+    ]
+    "created_at": "2025-12-18T22:00:00+00:00"
     "updated_at": "2025-12-18T22:00:00+00:00"
 }
 

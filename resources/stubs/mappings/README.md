@@ -83,7 +83,7 @@ vendor/bin/sail artisan inflow:process \
 ## Note
 
 - I mapping includono validation rules complete per ogni campo
-- Le relazioni sono configurate con `relation_lookup` appropriato
+- Le relazioni sono gestite automaticamente dal sistema basandosi su execution_order e tipo di relazione
 - I transform sono applicati dove necessario
 - Le opzioni `duplicate_strategy` sono configurate per ogni test
 
