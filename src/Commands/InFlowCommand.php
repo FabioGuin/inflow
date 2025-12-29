@@ -44,12 +44,11 @@ class InFlowCommand extends Command
      * @var string
      */
     protected $signature = 'inflow:process
-                            {from? : Source file path (CSV/Excel) - will prompt if not provided}
-                            {to? : Target model class (FQCN, e.g., App\\\\Models\\\\User) - will prompt if not provided}
-                            {--sanitize= : Apply sanitization to the file (1/0, true/false, y/n - default: from config)}
-                            {--newline-format= : Newline format - options: lf, crlf, cr (default: lf)}
+                            {file : Source file path (CSV/Excel/JSON)}
+                            {--mapping= : Path to mapping definition file (JSON) - required}
+                            {--sanitize= : Apply sanitization to the file (1/0, true/false, y/n - default: from mapping)}
+                            {--newline-format= : Newline format - options: lf, crlf, cr (default: from mapping)}
                             {--preview= : Number of rows to preview (default: 5)}
-                            {--mapping= : Path to mapping definition file (JSON) - auto-detected if not provided}
                             {--error-report : Generate detailed error report file on failure}';
 
     /**
@@ -57,7 +56,7 @@ class InFlowCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Process a file through InFlow ETL engine';
+    protected $description = 'Execute ETL process using existing mapping file';
 
     /**
      * Execute the console command.
@@ -69,8 +68,36 @@ class InFlowCommand extends Command
         try {
             $this->note('Starting InFlow processing...');
 
-            $filePath = $this->requireFilePath();
+            // Validate required mapping file
+            $mappingPath = $this->option('mapping');
+            if ($mappingPath === null || ! file_exists($mappingPath)) {
+                $this->error('Mapping file is required. Use --mapping=path/to/mapping.json');
+                $this->line('');
+                $this->line('To create a mapping file, use:');
+                $this->line('  php artisan inflow:make-mapping {file} {model}');
+
+                return Command::FAILURE;
+            }
+
+            // Load mapping file
+            $mappingData = json_decode(file_get_contents($mappingPath), true);
+            if ($mappingData === null || json_last_error() !== JSON_ERROR_NONE) {
+                $this->error("Invalid mapping file: {$mappingPath}");
+                $this->line("JSON error: ".json_last_error_msg());
+
+                return Command::FAILURE;
+            }
+
+            $filePath = $this->argument('file');
+            if (! file_exists($filePath)) {
+                $this->error("File not found: {$filePath}");
+
+                return Command::FAILURE;
+            }
+
             $context = $this->createProcessingContext($filePath, $startTime);
+            // Store mapping data in context for orchestrator to use
+            $context = $context->withMappingDefinition($mappingData);
 
             $presenter = new ConsolePresenter($this);
             $context = $this->orchestrator->process($this, $context, $presenter);
