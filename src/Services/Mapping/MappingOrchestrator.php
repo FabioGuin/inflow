@@ -290,12 +290,8 @@ class MappingOrchestrator
         // Build all mappings (main + related models)
         $allMappings = [];
 
-        // Main model mapping
+        // Main model mapping (always execution_order: 1)
         $mainExecutionOrder = 1;
-        if ($context->dependencyAnalysis !== null && ! $context->dependencyAnalysis['isRoot']) {
-            // For now, use 1. In future, use ExecutionOrderService for multiple models
-            $mainExecutionOrder = 1;
-        }
 
         if (! empty($mappingResult['main'])) {
             $allMappings[] = [
