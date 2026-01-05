@@ -60,17 +60,324 @@ class EloquentLoader
     }
 
     /**
-     * Load a row into a model using the mapping definition
+     * Load a row into a model using the mapping definition (new JSON format).
      *
-     * TODO: Re-implement with new mapping system
-     *
+     * @param  Row  $row  The row data to load
+     * @param  array  $mapping  Mapping definition with structure: ['model' => string, 'execution_order' => int, 'columns' => array]
      * @param  bool  $truncateLongFields  Whether to truncate fields that exceed column max length
-     * @return Model|null The loaded model, or null if the model was skipped (e.g., duplicate with 'skip' strategy)
+     * @param  array<string, Model>  $createdModels  Models created in previous mappings (for foreign keys)
+     * @return Model|null The loaded model, or null if the model was skipped
      */
-    public function load(Row $row, mixed $mapping, bool $truncateLongFields = true): ?Model
+    public function load(Row $row, array $mapping, bool $truncateLongFields = true, array $createdModels = []): ?Model
     {
-        // TODO: Re-implement with new mapping system
-        return null;
+        $this->resetTruncatedFields();
+
+        $modelClass = $mapping['model'];
+        $columns = $mapping['columns'] ?? [];
+
+        // Separate attributes and relations
+        $attributes = [];
+        $relations = [];
+
+        foreach ($columns as $column) {
+            $source = $column['source'] ?? null;
+            $target = $column['target'] ?? null;
+            $transforms = $column['transforms'] ?? [];
+            $default = $column['default'] ?? null;
+            $validationRule = $column['validation_rule'] ?? null;
+
+            if ($source === null || $target === null) {
+                continue;
+            }
+
+            // Extract value from row
+            $value = $this->extractValueFromRow($row, $source, $transforms, $default);
+
+            // Parse target to determine if it's an attribute or relation
+            $targetParts = $this->parseTarget($target);
+
+            if ($targetParts['type'] === 'attribute') {
+                // Direct attribute
+                $attributeName = $targetParts['attribute'];
+                
+                // Validate and truncate if needed
+                if ($truncateLongFields && is_string($value)) {
+                    $result = $this->validateAndTruncate($modelClass, $attributeName, $value);
+                    $value = $result['value'];
+                    if ($result['truncated'] && $result['details'] !== null) {
+                        $this->truncatedFields[] = $result['details'];
+                    }
+                }
+
+                $attributes[$attributeName] = $value;
+            } else {
+                // Relation
+                $this->addToRelationData($relations, $targetParts, $value, $column, $modelClass);
+            }
+        }
+
+        // Inject foreign keys from created parent models (for array mappings)
+        // This must be called BEFORE we check for foreign keys in relations
+        $this->injectForeignKeysFromCreatedModels($modelClass, $createdModels, $attributes);
+        
+        // Also check if foreign keys are present in the row data (for array mappings where they were injected)
+        $this->extractForeignKeysFromRow($modelClass, $row, $attributes);
+
+        // Resolve BelongsTo relations first (they set foreign keys)
+        $separated = $this->separateRelations($relations, $modelClass);
+        foreach ($separated['belongsTo'] as $relationName => $relationInfo) {
+            if (isset($relationInfo['foreign_key'])) {
+                $attributes[$relationInfo['foreign_key']['key']] = $relationInfo['foreign_key']['value'];
+            }
+        }
+
+        // Create or update model
+        $options = [
+            'unique_key' => $mapping['unique_key'] ?? null,
+            'duplicate_strategy' => $mapping['duplicate_strategy'] ?? 'update',
+        ];
+
+        $model = $this->createOrUpdate($modelClass, $attributes, $options);
+
+        if ($model === null) {
+            return null; // Skipped (duplicate with 'skip' strategy)
+        }
+
+        // Set BelongsTo relations for immediate access
+        $this->setBelongsToRelations($model, $separated['belongsTo']);
+
+        // Sync other relations (HasOne, HasMany, BelongsToMany)
+        foreach ($separated['other'] as $relationName => $relationInfo) {
+            $this->syncRelation(
+                $model,
+                $relationName,
+                $relationInfo['data'] ?? [],
+                $options,
+                $relationInfo['lookup'] ?? null
+            );
+        }
+
+        return $model;
+    }
+
+    /**
+     * Inject foreign keys from created parent models.
+     * 
+     * For example, if Book needs author_id, inject it from the created Author model.
+     */
+    private function injectForeignKeysFromCreatedModels(string $modelClass, array $createdModels, array &$attributes): void
+    {
+        // Use ModelDependencyService to find BelongsTo relations
+        $dependencyService = app(\InFlow\Services\Mapping\ModelDependencyService::class);
+        $dependencies = $dependencyService->analyzeDependencies($modelClass);
+        
+        // For each BelongsTo relation, inject the foreign key if parent model exists
+        foreach ($dependencies['belongsTo'] as $relationName => $relatedModelClass) {
+            // Check if we have the parent model created
+            if (! isset($createdModels[$relatedModelClass])) {
+                continue;
+            }
+            
+            // Skip if foreign key is already set
+            try {
+                $model = new $modelClass;
+                if (! method_exists($model, $relationName)) {
+                    continue;
+                }
+                
+                $relation = $model->$relationName();
+                if (! method_exists($relation, 'getForeignKeyName')) {
+                    continue;
+                }
+                
+                $foreignKey = $relation->getForeignKeyName();
+                
+                // Only inject if not already set
+                if (! isset($attributes[$foreignKey])) {
+                    $parentModel = $createdModels[$relatedModelClass];
+                    $attributes[$foreignKey] = $parentModel->getKey();
+                }
+            } catch (\Exception $e) {
+                \inflow_report($e, 'debug', [
+                    'operation' => 'injectForeignKeysFromCreatedModels',
+                    'model' => $modelClass,
+                    'relation' => $relationName,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Extract foreign keys from row data (for array mappings where they were injected).
+     */
+    private function extractForeignKeysFromRow(string $modelClass, Row $row, array &$attributes): void
+    {
+        // Use ModelDependencyService to find BelongsTo relations
+        $dependencyService = app(\InFlow\Services\Mapping\ModelDependencyService::class);
+        $dependencies = $dependencyService->analyzeDependencies($modelClass);
+        
+        // For each BelongsTo relation, check if foreign key is in row data
+        foreach ($dependencies['belongsTo'] as $relationName => $relatedModelClass) {
+            try {
+                $model = new $modelClass;
+                if (! method_exists($model, $relationName)) {
+                    continue;
+                }
+                
+                $relation = $model->$relationName();
+                if (! method_exists($relation, 'getForeignKeyName')) {
+                    continue;
+                }
+                
+                $foreignKey = $relation->getForeignKeyName();
+                
+                // If foreign key is not already set in attributes, check row data
+                if (! isset($attributes[$foreignKey]) && $row->has($foreignKey)) {
+                    $attributes[$foreignKey] = $row->get($foreignKey);
+                    \inflow_report(new \Exception("Extracted {$foreignKey} from row"), 'debug', [
+                        'operation' => 'extractForeignKeysFromRow',
+                        'model' => $modelClass,
+                        'relation' => $relationName,
+                        'foreignKey' => $foreignKey,
+                        'value' => $attributes[$foreignKey],
+                    ]);
+                }
+            } catch (\Exception $e) {
+                \inflow_report($e, 'debug', [
+                    'operation' => 'extractForeignKeysFromRow',
+                    'model' => $modelClass,
+                    'relation' => $relationName,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Extract value from row, applying transforms and default.
+     */
+    private function extractValueFromRow(Row $row, string $source, array $transforms, mixed $default): mixed
+    {
+        // Handle virtual columns
+        if ($this->isVirtualColumn($source)) {
+            return $default;
+        }
+
+        $value = $row->get($source);
+
+        // Apply default if value is empty
+        if ($value === null || $value === '') {
+            $value = $default;
+        }
+
+        // Apply transformations
+        if (! empty($transforms)) {
+            $value = $this->transformEngine->apply($value, $transforms, ['row' => $row->toArray()]);
+        }
+
+        return $value;
+    }
+
+    /**
+     * Parse target to determine type and parts.
+     *
+     * @return array{type: 'attribute'|'relation', relation?: string, attribute?: string, isArray?: bool}
+     */
+    private function parseTarget(string $target): array
+    {
+        // Check for array relation (HasMany/BelongsToMany): "books.*.title"
+        if (preg_match('/^([^.*]+)\.\*\.(.+)$/', $target, $matches)) {
+            return [
+                'type' => 'relation',
+                'relation' => $matches[1],
+                'attribute' => $matches[2],
+                'isArray' => true,
+            ];
+        }
+
+        // Check for direct relation (HasOne/BelongsTo): "profile.bio"
+        if (preg_match('/^([^.]+)\.(.+)$/', $target, $matches)) {
+            return [
+                'type' => 'relation',
+                'relation' => $matches[1],
+                'attribute' => $matches[2],
+                'isArray' => false,
+            ];
+        }
+
+        // Direct attribute: "name"
+        return [
+            'type' => 'attribute',
+            'attribute' => $target,
+        ];
+    }
+
+    /**
+     * Add value to relation data structure.
+     */
+    private function addToRelationData(array &$relations, array $targetParts, mixed $value, array $column, string $modelClass): void
+    {
+        $relationName = $targetParts['relation'];
+        $attribute = $targetParts['attribute'];
+        $isArray = $targetParts['isArray'] ?? false;
+
+        if (! isset($relations[$relationName])) {
+            $relations[$relationName] = [
+                'data' => [],
+                'lookup' => null,
+                'pivot' => [],
+            ];
+        }
+
+        if ($isArray) {
+            // HasMany/BelongsToMany: value should be an array (from json_decode)
+            if (is_array($value)) {
+                // Full array mapping: store entire array
+                $relations[$relationName]['data']['__array_data'] = $value;
+                $relations[$relationName]['data']['__full_array'] = true;
+            } else {
+                // Single field from array: add to fields list
+                if (! isset($relations[$relationName]['data']['__array_data'])) {
+                    $relations[$relationName]['data']['__array_data'] = [];
+                }
+                if (! isset($relations[$relationName]['data']['__fields'])) {
+                    $relations[$relationName]['data']['__fields'] = [];
+                }
+                if (! in_array($attribute, $relations[$relationName]['data']['__fields'], true)) {
+                    $relations[$relationName]['data']['__fields'][] = $attribute;
+                }
+            }
+        } else {
+            // HasOne/BelongsTo: single value
+            $relations[$relationName]['data'][$attribute] = $value;
+
+            // Auto-configure lookup for BelongsTo (if not already set)
+            $this->configureLookupForBelongsTo($relations[$relationName], $modelClass, $relationName, $attribute);
+        }
+    }
+
+    /**
+     * Auto-configure lookup for BelongsTo relations.
+     */
+    private function configureLookupForBelongsTo(array &$relationInfo, string $modelClass, string $relationName, string $attribute): void
+    {
+        // Only configure if not already set
+        if ($relationInfo['lookup'] !== null) {
+            return;
+        }
+
+        try {
+            $relationType = $this->relationTypeService->getRelationType($modelClass, $relationName);
+
+            if ($relationType === EloquentRelationType::BelongsTo) {
+                // Auto-configure lookup for BelongsTo
+                $relationInfo['lookup'] = [
+                    'field' => $attribute,
+                    'create_if_missing' => false,
+                ];
+            }
+        } catch (\Exception $e) {
+            // Relation type detection failed - skip lookup configuration
+        }
     }
 
     // ========== Attribute Grouping (consolidated from AttributeGroupingService) ==========
@@ -261,13 +568,13 @@ class EloquentLoader
         $relations[$relationName]['data']['__full_array'] = true;
 
         // Configure lookup automatically based on relation type
-        $this->configureLookup(
-            $relations[$relationName],
-            $columnMapping,
-            $relationName,
-            '*',
-            $mapping
-        );
+            $this->configureLookup(
+                $relations[$relationName],
+                $columnMapping,
+                $relationName,
+                '*',
+                $mapping
+            );
     }
 
     private function handlePivotMapping(
@@ -446,7 +753,7 @@ class EloquentLoader
     private function createOrUpdate(string $modelClass, array $attributes, array $options): ?Model
     {
         $uniqueKey = $this->normalizeUniqueKey($options['unique_key'] ?? null);
-        $duplicateStrategy = $this->parseDuplicateStrategy($options['duplicate_strategy'] ?? 'error');
+        $duplicateStrategy = $this->parseDuplicateStrategy($options['duplicate_strategy'] ?? 'update');
 
         if ($uniqueKey === null) {
             return $this->createWithoutUniqueKey($modelClass, $attributes, $duplicateStrategy);
@@ -688,7 +995,20 @@ class EloquentLoader
         array $lookup,
         array $relationData
     ): ?array {
-        $lookupField = $lookup['field'];
+        // Support both old format (with 'column' object) and new format (direct field)
+        $lookupField = $lookup['field'] ?? null;
+        if ($lookupField === null && isset($lookup['column'])) {
+            // Old format - extract from column mapping
+            $columnMapping = $lookup['column'];
+            $lookupField = is_object($columnMapping) && isset($columnMapping->target) 
+                ? $this->parseTarget($columnMapping->target)['attribute'] 
+                : null;
+        }
+
+        if ($lookupField === null) {
+            return null;
+        }
+
         $createIfMissing = $lookup['create_if_missing'] ?? false;
 
         // Get the lookup value from relationData (e.g., category name)
