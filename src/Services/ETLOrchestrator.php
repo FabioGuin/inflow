@@ -6,11 +6,7 @@ use InFlow\Commands\InFlowCommand;
 use InFlow\Contracts\ReaderInterface;
 use InFlow\Detectors\FormatDetector;
 use InFlow\Enums\File\NewlineFormat;
-use InFlow\Enums\File\SourceType;
-use InFlow\Enums\Flow\ErrorPolicy;
 use InFlow\Enums\UI\MessageType;
-use InFlow\Executors\FlowExecutor;
-use InFlow\Loaders\EloquentLoader;
 use InFlow\Presenters\Contracts\PresenterInterface;
 use InFlow\Profilers\Profiler;
 use InFlow\Readers\CsvReader;
@@ -19,10 +15,13 @@ use InFlow\Readers\JsonLinesReader;
 use InFlow\Readers\XmlReader;
 use InFlow\Sanitizers\SanitizerConfigKeys;
 use InFlow\Services\Core\ConfigurationResolver;
-use InFlow\Services\Core\FlowExecutionService;
 use InFlow\Services\DataProcessing\SanitizationService;
 use InFlow\Services\File\FileReaderService;
 use InFlow\Services\File\FileWriterService;
+use Illuminate\Database\Eloquent\Model;
+use InFlow\Loaders\EloquentLoader;
+use InFlow\Transforms\TransformEngine;
+use InFlow\ValueObjects\Data\Row;
 use InFlow\Services\Formatter\FileInfoFormatter;
 use InFlow\Services\Formatter\FlowRunFormatter;
 use InFlow\Services\Formatter\FormatInfoFormatter;
@@ -33,14 +32,12 @@ use InFlow\Services\Formatter\QualityReportFormatter;
 use InFlow\Services\Formatter\SchemaFormatter;
 use InFlow\Services\Formatter\StepProgressFormatter;
 use InFlow\Services\Formatter\StepSummaryFormatter;
-use InFlow\Services\Loading\PivotSyncService;
 use InFlow\Sources\FileSource;
 use InFlow\Enums\Data\ColumnType;
 use InFlow\Enums\File\FileType;
 use InFlow\ValueObjects\Data\ColumnMetadata;
 use InFlow\ValueObjects\Data\SourceSchema;
 use InFlow\ValueObjects\File\DetectedFormat;
-use InFlow\ValueObjects\Flow\Flow;
 use InFlow\ValueObjects\Flow\ProcessingContext;
 
 /**
@@ -48,14 +45,12 @@ use InFlow\ValueObjects\Flow\ProcessingContext;
  *
  * Consolidates all ETL steps into a single linear flow:
  * 1. Load file
- * 2. Read content
+ * 2. Read content (if sanitization needed)
  * 3. Sanitize (if needed)
- * 4. Detect format
+ * 4. Detect format (or use from mapping)
  * 5. Create reader
- * 6. Profile data (if no mapping)
- * 7. Process mapping
- * 8. Execute flow
- * 9. Display results
+ * 6. Profile data (skip if source_schema in mapping)
+ * 7. Execute flow (mapping already loaded in context)
  */
 readonly class ETLOrchestrator
 {
@@ -66,9 +61,8 @@ readonly class ETLOrchestrator
         private SanitizationService $sanitizationService,
         private FormatDetector $formatDetector,
         private Profiler $profiler,
-        private FlowExecutionService $flowExecutionService,
         private EloquentLoader $eloquentLoader,
-        private PivotSyncService $pivotSyncService,
+        private TransformEngine $transformEngine,
         private FormatInfoFormatter $formatInfoFormatter,
         private SchemaFormatter $schemaFormatter,
         private PreviewFormatter $previewFormatter,
@@ -91,8 +85,7 @@ readonly class ETLOrchestrator
      */
     public function process(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
-        $hasMapping = $context->mappingDefinition !== null;
-        $flowConfig = $hasMapping ? ($context->mappingDefinition['flow_config'] ?? null) : null;
+        $flowConfig = $context->mappingDefinition['flow_config'] ?? null;
 
         // Step 1: Load file
         $context = $this->loadFile($context, $presenter);
@@ -111,7 +104,7 @@ readonly class ETLOrchestrator
 
         // Step 3: Sanitize (if needed and not already configured in mapping)
         if ($shouldSanitize) {
-            $context = $this->sanitize($command, $context, $presenter, $flowConfig);
+            $context = $this->sanitize($command, $context, $presenter, $shouldSanitize, $flowConfig);
             if ($context->cancelled) {
                 return $context;
             }
@@ -135,13 +128,7 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        // Step 7: Process mapping - TODO: Re-implement mapping system
-        $context = $this->processMapping($command, $context, $presenter);
-        if ($context->cancelled) {
-            return $context;
-        }
-
-        // Step 8: Execute flow
+        // Step 7: Execute flow (mapping is already loaded in context)
         $context = $this->executeFlow($command, $context, $presenter);
 
         return $context;
@@ -152,7 +139,7 @@ readonly class ETLOrchestrator
      */
     private function loadFile(ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
-        $presenter->presentStepProgress($this->stepProgressFormatter->format(1, 8, 'Loading file...'));
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(1, 7, 'Loading file...'));
 
         try {
             $source = FileSource::fromPath($context->filePath);
@@ -184,7 +171,7 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        $presenter->presentStepProgress($this->stepProgressFormatter->format(2, 8, 'Reading file content...'));
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(2, 7, 'Reading file content...'));
 
         $content = $this->readFileContent($command, $context->source);
         $lineCount = $this->countLines($content);
@@ -232,22 +219,22 @@ readonly class ETLOrchestrator
         }
 
         // Priority 3: Config file (fallback)
-        return $this->determineShouldSanitize($command);
+        $sanitizerEnabled = $this->configResolver->getSanitizerConfig('enabled', true);
+
+        return is_bool($sanitizerEnabled) ? $sanitizerEnabled : true;
     }
 
     /**
      * Step 3: Sanitize content if needed.
      */
-    private function sanitize(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter, ?array $flowConfig = null): ProcessingContext
+    private function sanitize(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter, bool $shouldSanitize, ?array $flowConfig = null): ProcessingContext
     {
         if ($context->content === null) {
             return $context;
         }
 
-        $shouldSanitize = $this->shouldSanitize($command, $flowConfig);
-
         if ($shouldSanitize) {
-            $presenter->presentStepProgress($this->stepProgressFormatter->format(3, 8, 'Sanitizing content...'));
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(3, 7, 'Sanitizing content...'));
             $presenter->presentMessage($this->messageFormatter->format('Cleaning file: removing BOM, normalizing newlines, removing control characters.', MessageType::Info));
 
             $lineCount = $context->lineCount ?? 0;
@@ -311,7 +298,7 @@ readonly class ETLOrchestrator
         }
 
         // Otherwise, detect format
-        $presenter->presentStepProgress($this->stepProgressFormatter->format(4, 8, 'Detecting file format...'));
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(4, 7, 'Detecting file format...'));
         $presenter->presentMessage($this->messageFormatter->format('Analyzing file structure to detect format, delimiter, encoding, and header presence.', MessageType::Info));
 
         $format = $this->formatDetector->detect($context->source);
@@ -339,16 +326,16 @@ readonly class ETLOrchestrator
         $reader = null;
 
         if ($context->format->type->isCsv()) {
-            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading CSV data...'));
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 7, 'Reading CSV data...'));
             $reader = $this->readCsvData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isExcel()) {
-            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading Excel data...'));
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 7, 'Reading Excel data...'));
             $reader = $this->readExcelData($command, $context->source, $context->format, $presenter);
         } elseif ($context->format->type->isJson()) {
-            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading JSON Lines data...'));
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 7, 'Reading JSON Lines data...'));
             $reader = $this->readJsonData($command, $context->source, $presenter);
         } elseif ($context->format->type->isXml()) {
-            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 8, 'Reading XML data...'));
+            $presenter->presentStepProgress($this->stepProgressFormatter->format(5, 7, 'Reading XML data...'));
             $reader = $this->readXmlData($command, $context->source, $presenter);
         } else {
             $presenter->presentMessage($this->messageFormatter->format('Data reading skipped (unsupported file type: '.$context->format->type->value.')', MessageType::Warning));
@@ -396,7 +383,7 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        $presenter->presentStepProgress($this->stepProgressFormatter->format(6, 8, 'Profiling data quality...'));
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(6, 7, 'Profiling data quality...'));
         $presenter->presentMessage($this->messageFormatter->format('Analyzing data structure, types, and quality issues. This helps identify problems before import.', MessageType::Info));
 
         $context->reader->rewind();
@@ -428,23 +415,9 @@ readonly class ETLOrchestrator
     }
 
     /**
-     * Step 7: Process mapping definition.
+     * Step 7: Execute flow.
      *
-     * TODO: Re-implement mapping system from scratch
-     * This method should handle the "mappings" section from mapping-template.json
-     */
-    private function processMapping(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
-    {
-        $presenter->presentStepProgress($this->stepProgressFormatter->format(7, 8, 'Processing mapping...'));
-
-        // TODO: Implement new mapping system
-        $presenter->presentMessage($this->messageFormatter->format('Mapping system not yet implemented', MessageType::Warning));
-
-        return $context->withCancelled();
-    }
-
-    /**
-     * Step 8: Execute flow.
+     * Processes all rows from the reader using the mapping definition.
      */
     private function executeFlow(InFlowCommand $command, ProcessingContext $context, PresenterInterface $presenter): ProcessingContext
     {
@@ -454,85 +427,572 @@ readonly class ETLOrchestrator
             return $context;
         }
 
-        // TODO: Re-implement flow execution with new mapping system
-        $presenter->presentMessage($this->messageFormatter->format('Flow execution requires mapping system', MessageType::Warning));
+        if ($context->mappingDefinition === null) {
+            $presenter->presentMessage($this->messageFormatter->format('Flow execution requires mapping file', MessageType::Warning));
 
-        return $context;
-
-        $presenter->presentStepProgress($this->stepProgressFormatter->format(8, 8, 'Executing ETL flow...'));
-        $presenter->presentMessage($this->messageFormatter->format('Importing data into database. Rows are processed in chunks for optimal performance.', MessageType::Info));
-
-        // JSON is source of truth, config is fallback
-        // TODO: Get flow config from new mapping system
-        $flowConfig = [];
-
-        // Sanitizer: JSON first, then config, then command option
-        $jsonSanitizer = $flowConfig['sanitizer'] ?? null;
-        if ($jsonSanitizer !== null) {
-            // Use sanitizer config from JSON
-            $shouldSanitize = $jsonSanitizer['enabled'] ?? true;
-            $sanitizerConfig = $this->normalizeSanitizerConfigFromJson($jsonSanitizer);
-        } else {
-            // Fallback to config
-            $shouldSanitize = $context->shouldSanitize ?? true;
-            $sanitizerConfig = $this->configResolver->buildSanitizerConfig(
-                fn (string $key) => $command->option($key)
-            );
+            return $context;
         }
 
-        // Format: JSON first, then auto-detect
-        $formatConfig = $flowConfig['format'] ?? null;
+        $presenter->presentStepProgress($this->stepProgressFormatter->format(7, 7, 'Executing ETL flow...'));
+        $presenter->presentMessage($this->messageFormatter->format('Importing data into database. Rows are processed in chunks for optimal performance.', MessageType::Info));
 
-        // Execution options: JSON first, then config
-        $jsonExecution = $flowConfig['execution'] ?? [];
-        $errorPolicy = $jsonExecution['error_policy']
-            ?? $this->configResolver->getExecutionConfig('error_policy', ErrorPolicy::Continue->value);
-        $errorPolicyEnum = ErrorPolicy::tryFrom($errorPolicy) ?? ErrorPolicy::Continue;
+        // Get execution options from flow_config
+        $flowConfig = $context->mappingDefinition['flow_config'] ?? [];
+        $executionConfig = $flowConfig['execution'] ?? [];
+        $chunkSize = $executionConfig['chunk_size'] ?? $this->configResolver->getExecutionConfig('chunk_size', 1000);
+        $skipEmptyRows = $executionConfig['skip_empty_rows'] ?? $this->configResolver->getExecutionConfig('skip_empty_rows', true);
+        $truncateLongFields = $executionConfig['truncate_long_fields'] ?? $this->configResolver->getExecutionConfig('truncate_long_fields', true);
 
-        $flow = new Flow(
-            sourceConfig: [
-                'path' => $context->filePath,
-                'type' => SourceType::File->value,
-            ],
-            sanitizerConfig: $shouldSanitize ? $sanitizerConfig : [],
-            formatConfig: $formatConfig,
-            mapping: null, // TODO: Replace with new mapping system
-            options: [
-                'chunk_size' => $jsonExecution['chunk_size']
-                    ?? $this->configResolver->getExecutionConfig('chunk_size', 1000),
-                'error_policy' => $errorPolicyEnum->value,
-                'skip_empty_rows' => $jsonExecution['skip_empty_rows']
-                    ?? $this->configResolver->getExecutionConfig('skip_empty_rows', true),
-                'truncate_long_fields' => $jsonExecution['truncate_long_fields']
-                    ?? $this->configResolver->getExecutionConfig('truncate_long_fields', true),
-            ],
-            name: 'Command Flow: '.basename($context->filePath),
-            description: 'Flow created from command execution'
-        );
+        // Get mappings and sort by execution_order
+        $mappings = $context->mappingDefinition['mappings'] ?? [];
+        usort($mappings, fn ($a, $b) => ($a['execution_order'] ?? 0) <=> ($b['execution_order'] ?? 0));
 
-        // TODO: Re-implement FlowExecutor with new mapping system
-        $presenter->presentMessage($this->messageFormatter->format('FlowExecutor requires mapping system', MessageType::Warning));
+        if (empty($mappings)) {
+            $presenter->presentMessage($this->messageFormatter->format('No mappings found in mapping file', MessageType::Warning));
+
+            return $context;
+        }
+
+        // Process rows
+        $context->reader->rewind();
+        $rowNumber = 0;
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        foreach ($context->reader as $rowData) {
+            $rowNumber++;
+
+            // Create Row object
+            $row = new Row($rowData, $rowNumber);
+
+            // Skip empty rows if configured
+            if ($skipEmptyRows && $row->isEmpty()) {
+                $skipped++;
+                continue;
+            }
+
+            // Process each mapping in execution order
+            // Track created models for dependent mappings (e.g., Book needs Author)
+            $createdModels = [];
+
+            foreach ($mappings as $mapping) {
+                try {
+                    // Skip nested mappings - they are processed inside their parent mappings
+                    if ($this->isNestedMapping($mapping, $mappings)) {
+                        continue;
+                    }
+                    
+                    // Check if this mapping processes array data (e.g., Book from books JSON)
+                    $isArrayMapping = $this->isArrayMapping($mapping);
+                    
+                    if ($isArrayMapping) {
+                        // Process each element in the array
+                        $arrayResults = $this->processArrayMapping($row, $mapping, $truncateLongFields, $createdModels, $mappings);
+                        $imported += $arrayResults['imported'];
+                        $skipped += $arrayResults['skipped'];
+                        $errors += $arrayResults['errors'];
+                    } else {
+                        // Normal mapping: process once per row
+                        $model = $this->eloquentLoader->load($row, $mapping, $truncateLongFields, $createdModels);
+
+                        if ($model === null) {
+                            $skipped++;
+                        } else {
+                            $imported++;
+                            // Store created model for dependent mappings
+                            $createdModels[$mapping['model']] = $model;
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $errors++;
+                    \inflow_report($e, 'error', [
+                        'operation' => 'load',
+                        'row' => $rowNumber,
+                        'model' => $mapping['model'] ?? 'unknown',
+                    ]);
+
+                    // Continue processing other mappings even if one fails
+                    // TODO: Implement error policy (continue, stop, etc.)
+                }
+            }
+
+            // Update progress periodically
+            if ($rowNumber % $chunkSize === 0) {
+                $presenter->presentProgressInfo($this->progressInfoFormatter->format(
+                    "Processing: {$imported} imported, {$skipped} skipped, {$errors} errors",
+                    rows: $rowNumber
+                ));
+            }
+        }
+
+        // Final summary
+        $presenter->presentMessage($this->messageFormatter->format('Flow execution completed', MessageType::Success));
+        $presenter->presentProgressInfo($this->progressInfoFormatter->format(
+            "Completed: {$imported} imported, {$skipped} skipped, {$errors} errors",
+            rows: $rowNumber
+        ));
 
         return $context;
+    }
 
-        /* TODO: Re-enable when mapping system is ready
-        $executor = new FlowExecutor(
-            $this->flowExecutionService,
-            $this->profiler,
-            $this->eloquentLoader,
-            null, // mappingValidator - TODO: Replace
-            null, // dependencyValidator - TODO: Replace
-            $this->pivotSyncService,
-            null, // progressCallback
-            null  // errorDecisionCallback
-        );
+    /**
+     * Check if a mapping is nested (should be processed inside another mapping).
+     * 
+     * A mapping is nested if:
+     * - It has array targets (e.g., "tags.*.name")
+     * - But the relation name in the target doesn't match the source (e.g., source="books", target="tags.*.name")
+     */
+    private function isNestedMapping(array $mapping, array $allMappings): bool
+    {
+        $columns = $mapping['columns'] ?? [];
+        if (empty($columns)) {
+            return false;
+        }
 
-        $flowRun = $executor->execute($flow, $context->filePath);
-        $context = $context->withFlowRun($flowRun);
+        $firstSource = $columns[0]['source'] ?? null;
+        if ($firstSource === null) {
+            return false;
+        }
 
-        $presenter->presentFlowRun($this->flowRunFormatter->format($flowRun));
-        */
+        // Check if all columns have the same source and target contains ".*" but relation doesn't match source
+        foreach ($columns as $column) {
+            $source = $column['source'] ?? null;
+            $target = $column['target'] ?? null;
 
+            if ($source !== $firstSource) {
+                return false; // Not all same source
+            }
+
+            if ($target !== null && str_contains($target, '.*')) {
+                // Extract relation name from target (e.g., "tags.*.name" → "tags")
+                if (preg_match('/^([^.*]+)\.\*\./', $target, $matches)) {
+                    $targetRelation = $matches[1];
+                    // If target relation doesn't match source, it's a nested mapping
+                    if ($targetRelation !== $source) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a mapping processes array data (all columns have same source and array targets).
+     * 
+     * Distinguishes between:
+     * - Direct array mapping: source="books", target="books.*.title" (Book from books array)
+     * - Nested mapping: source="books", target="tags.*.name" (Tag from tags inside books - should be processed as nested)
+     */
+    private function isArrayMapping(array $mapping): bool
+    {
+        $columns = $mapping['columns'] ?? [];
+        if (empty($columns)) {
+            return false;
+        }
+
+        // Check if all columns have the same source and target contains ".*"
+        $firstSource = $columns[0]['source'] ?? null;
+        if ($firstSource === null) {
+            return false;
+        }
+
+        $allSameSource = true;
+        $hasArrayTarget = false;
+        $isDirectArrayMapping = false;
+
+        foreach ($columns as $column) {
+            $source = $column['source'] ?? null;
+            $target = $column['target'] ?? null;
+
+            if ($source !== $firstSource) {
+                $allSameSource = false;
+                break;
+            }
+
+            if ($target !== null && str_contains($target, '.*')) {
+                $hasArrayTarget = true;
+                
+                // Check if target relation matches source (direct array mapping)
+                // Example: source="books", target="books.*.title" → direct array mapping
+                // Example: source="books", target="tags.*.name" → nested mapping (tags is inside books)
+                if (preg_match('/^([^.*]+)\.\*\./', $target, $matches)) {
+                    $targetRelation = $matches[1];
+                    if ($targetRelation === $source) {
+                        $isDirectArrayMapping = true;
+                    }
+                }
+            }
+        }
+
+        // Only return true if it's a direct array mapping (not nested)
+        return $allSameSource && $hasArrayTarget && $isDirectArrayMapping;
+    }
+
+    /**
+     * Process a mapping that handles array data (e.g., Book from books JSON array).
+     *
+     * @param  array  $allMappings  All mappings to check for nested mappings (e.g., Tag inside Book)
+     * @return array{imported: int, skipped: int, errors: int}
+     */
+    private function processArrayMapping(Row $row, array $mapping, bool $truncateLongFields, array $createdModels, array $allMappings = []): array
+    {
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+
+        $columns = $mapping['columns'] ?? [];
+        if (empty($columns)) {
+            return ['imported' => 0, 'skipped' => 0, 'errors' => 0];
+        }
+
+        // Get the source column (should be the same for all columns)
+        $sourceColumn = $columns[0]['source'] ?? null;
+        if ($sourceColumn === null) {
+            return ['imported' => 0, 'skipped' => 0, 'errors' => 0];
+        }
+
+        // Extract and decode JSON array
+        $rawValue = $row->get($sourceColumn);
+        if ($rawValue === null || $rawValue === '') {
+            return ['imported' => 0, 'skipped' => 0, 'errors' => 0];
+        }
+
+        // Apply json_decode transform if present
+        $firstColumn = $columns[0];
+        $transforms = $firstColumn['transforms'] ?? [];
+        $hasJsonDecode = in_array('json_decode', $transforms, true);
+
+        if ($hasJsonDecode) {
+            $arrayData = $this->transformEngine->apply($rawValue, ['json_decode'], ['row' => $row->toArray()]);
+        } else {
+            // Try to decode anyway if it looks like JSON
+            $arrayData = json_decode($rawValue, true);
+        }
+
+        if (! is_array($arrayData)) {
+            return ['imported' => 0, 'skipped' => 0, 'errors' => 0];
+        }
+
+        // Inject foreign keys from parent models (e.g., author_id for Book)
+        $this->injectForeignKeys($mapping, $createdModels, $arrayData);
+
+        // Normalize mapping for array processing: convert "books.*.title" → "title" in targets
+        $normalizedMapping = $this->normalizeArrayMapping($mapping);
+
+        // Process each element in the array
+        foreach ($arrayData as $index => $arrayItem) {
+            if (! is_array($arrayItem)) {
+                continue;
+            }
+
+            // Inject foreign keys into each array item (they were injected at array level, now copy to item)
+            $this->injectForeignKeysIntoItem($mapping, $createdModels, $arrayItem);
+
+            // Create a "sub-row" from the array item
+            $subRow = new Row($arrayItem, $row->lineNumber * 1000 + $index);
+
+            try {
+                $model = $this->eloquentLoader->load($subRow, $normalizedMapping, $truncateLongFields, $createdModels);
+
+                if ($model === null) {
+                    $skipped++;
+                } else {
+                    $imported++;
+                    // Store created model for dependent mappings (e.g., Tag needs Book)
+                    // Use the last created model of this type (for nested mappings like Tag)
+                    $createdModels[$mapping['model']] = $model;
+                    
+                    // Process nested mappings (e.g., Tag inside Book's tags array)
+                    $nestedResults = $this->processNestedMappings($subRow, $model, $mapping, $allMappings, $truncateLongFields, $createdModels);
+                    $imported += $nestedResults['imported'];
+                    $skipped += $nestedResults['skipped'];
+                    $errors += $nestedResults['errors'];
+                }
+            } catch (\Exception $e) {
+                $errors++;
+                \inflow_report($e, 'error', [
+                    'operation' => 'loadArrayItem',
+                    'row' => $row->lineNumber,
+                    'arrayIndex' => $index,
+                    'model' => $mapping['model'] ?? 'unknown',
+                ]);
+            }
+        }
+
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    /**
+     * Process nested mappings (e.g., Tag inside Book's tags array).
+     * 
+     * @return array{imported: int, skipped: int, errors: int}
+     */
+    private function processNestedMappings(Row $subRow, Model $parentModel, array $parentMapping, array $allMappings, bool $truncateLongFields, array $createdModels): array
+    {
+        $imported = 0;
+        $skipped = 0;
+        $errors = 0;
+        
+        $parentModelClass = $parentMapping['model'];
+        
+        // Find nested mappings that depend on this parent model
+        foreach ($allMappings as $nestedMapping) {
+            $nestedModelClass = $nestedMapping['model'] ?? null;
+            
+            // Skip if same as parent or already processed
+            if ($nestedModelClass === $parentModelClass || ! isset($nestedMapping['columns'])) {
+                continue;
+            }
+            
+            // Check if this nested mapping has targets that reference a relation of the parent
+            // Example: Tag has "tags.*.name" and Book has "tags" relation
+            $hasNestedTarget = false;
+            $nestedRelationName = null;
+            
+            foreach ($nestedMapping['columns'] as $column) {
+                $target = $column['target'] ?? '';
+                if (preg_match('/^([^.*]+)\.\*\./', $target, $matches)) {
+                    $hasNestedTarget = true;
+                    $nestedRelationName = $matches[1];
+                    break;
+                }
+            }
+            
+            if (! $hasNestedTarget || $nestedRelationName === null) {
+                continue;
+            }
+            
+            // Check if parent model has this relation
+            try {
+                if (! method_exists($parentModel, $nestedRelationName)) {
+                    continue;
+                }
+                
+                $relation = $parentModel->$nestedRelationName();
+                $relatedModelClass = get_class($relation->getRelated());
+                
+                // If the relation points to the nested model, process it
+                if ($relatedModelClass === $nestedModelClass) {
+                    // Extract nested array from sub-row (e.g., tags from book item)
+                    $nestedArrayData = $subRow->get($nestedRelationName);
+                    
+                    if (! is_array($nestedArrayData) || empty($nestedArrayData)) {
+                        continue;
+                    }
+                    
+                    // Normalize nested mapping: convert "tags.*.name" → "name"
+                    $normalizedNestedMapping = $this->normalizeArrayMapping($nestedMapping);
+                    
+                    // Process each nested item
+                    foreach ($nestedArrayData as $nestedIndex => $nestedItem) {
+                        if (! is_array($nestedItem)) {
+                            continue;
+                        }
+                        
+                        // Create a sub-row from the nested item (e.g., a single tag)
+                        $nestedSubRow = new Row($nestedItem, $subRow->lineNumber * 1000 + $nestedIndex);
+                        
+                        try {
+                            $nestedModel = $this->eloquentLoader->load($nestedSubRow, $normalizedNestedMapping, $truncateLongFields, $createdModels);
+                            
+                            if ($nestedModel === null) {
+                                $skipped++;
+                            } else {
+                                $imported++;
+                                $createdModels[$nestedModelClass] = $nestedModel;
+                                
+                                // Sync BelongsToMany relation (Tag <-> Book)
+                                if ($relation instanceof \Illuminate\Database\Eloquent\Relations\BelongsToMany) {
+                                    $relation->syncWithoutDetaching([$nestedModel->getKey()]);
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            $errors++;
+                            \inflow_report($e, 'error', [
+                                'operation' => 'loadNestedItem',
+                                'row' => $subRow->lineNumber,
+                                'nestedIndex' => $nestedIndex,
+                                'model' => $nestedModelClass,
+                                'nestedItem' => $nestedItem,
+                                'normalizedMapping' => $normalizedNestedMapping,
+                            ]);
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \inflow_report($e, 'debug', [
+                    'operation' => 'processNestedMappings',
+                    'parentModel' => $parentModelClass,
+                    'nestedModel' => $nestedModelClass,
+                ]);
+            }
+        }
+        
+        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    /**
+     * Normalize array mapping: convert "books.*.title" → "title" in targets and use target as source.
+     * 
+     * For array mappings, the source column contains JSON array, and targets are like "books.*.title".
+     * When processing each array item, we need to use "title" as both source and target.
+     */
+    private function normalizeArrayMapping(array $mapping): array
+    {
+        $normalized = $mapping;
+        $normalizedColumns = [];
+
+        foreach ($mapping['columns'] ?? [] as $column) {
+            $target = $column['target'] ?? null;
+            
+            if ($target === null) {
+                $normalizedColumns[] = $column;
+                continue;
+            }
+
+            // Extract attribute name from array target (e.g., "books.*.title" → "title")
+            if (preg_match('/^[^.*]+\.\*\.(.+)$/', $target, $matches)) {
+                $attributeName = $matches[1];
+                
+                // Create normalized column: use attribute as both source and target
+                $normalizedColumn = $column;
+                $normalizedColumn['source'] = $attributeName; // Use attribute name as source
+                $normalizedColumn['target'] = $attributeName; // Use attribute name as target
+                
+                // Remove json_decode transform (already decoded)
+                if (isset($normalizedColumn['transforms'])) {
+                    $normalizedColumn['transforms'] = array_filter(
+                        $normalizedColumn['transforms'],
+                        fn($t) => $t !== 'json_decode'
+                    );
+                    $normalizedColumn['transforms'] = array_values($normalizedColumn['transforms']);
+                }
+                
+                $normalizedColumns[] = $normalizedColumn;
+            } else {
+                // Keep as-is if not an array target
+                $normalizedColumns[] = $column;
+            }
+        }
+
+        $normalized['columns'] = $normalizedColumns;
+
+        return $normalized;
+    }
+
+    /**
+     * Inject foreign keys from parent models into a single array item.
+     * 
+     * For example, if Book needs author_id, inject it from the created Author model.
+     */
+    private function injectForeignKeysIntoItem(array $mapping, array $createdModels, array &$arrayItem): void
+    {
+        $modelClass = $mapping['model'];
+        
+        // Use ModelDependencyService to find BelongsTo relations
+        $dependencyService = app(\InFlow\Services\Mapping\ModelDependencyService::class);
+        $dependencies = $dependencyService->analyzeDependencies($modelClass);
+        
+        // For each BelongsTo relation, inject the foreign key
+        foreach ($dependencies['belongsTo'] as $relationName => $relatedModelClass) {
+            // Check if we have the parent model created
+            if (! isset($createdModels[$relatedModelClass])) {
+                continue;
+            }
+            
+            $parentModel = $createdModels[$relatedModelClass];
+            $parentId = $parentModel->getKey();
+            
+            // Get the foreign key name for this relation
+            try {
+                $model = new $modelClass;
+                if (! method_exists($model, $relationName)) {
+                    continue;
+                }
+                
+                $relation = $model->$relationName();
+                if (! method_exists($relation, 'getForeignKeyName')) {
+                    continue;
+                }
+                
+                $foreignKey = $relation->getForeignKeyName();
+                
+                // Inject foreign key into array item if not already set
+                if (! isset($arrayItem[$foreignKey])) {
+                    $arrayItem[$foreignKey] = $parentId;
+                    \inflow_report(new \Exception("Injected {$foreignKey} = {$parentId}"), 'debug', [
+                        'operation' => 'injectForeignKeysIntoItem',
+                        'model' => $modelClass,
+                        'relation' => $relationName,
+                        'foreignKey' => $foreignKey,
+                        'parentId' => $parentId,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                \inflow_report($e, 'debug', [
+                    'operation' => 'injectForeignKeysIntoItem',
+                    'model' => $modelClass,
+                    'relation' => $relationName,
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Inject foreign keys from parent models into array data.
+     * 
+     * For example, if Book needs author_id, inject it from the created Author model.
+     */
+    private function injectForeignKeys(array $mapping, array $createdModels, array &$arrayData): void
+    {
+        $modelClass = $mapping['model'];
+        
+        // Use ModelDependencyService to find BelongsTo relations
+        $dependencyService = app(\InFlow\Services\Mapping\ModelDependencyService::class);
+        $dependencies = $dependencyService->analyzeDependencies($modelClass);
+        
+        // For each BelongsTo relation, inject the foreign key
+        foreach ($dependencies['belongsTo'] as $relationName => $relatedModelClass) {
+            // Check if we have the parent model created
+            if (! isset($createdModels[$relatedModelClass])) {
+                continue;
+            }
+            
+            $parentModel = $createdModels[$relatedModelClass];
+            $parentId = $parentModel->getKey();
+            
+            // Get the foreign key name for this relation
+            try {
+                $model = new $modelClass;
+                if (! method_exists($model, $relationName)) {
+                    continue;
+                }
+                
+                $relation = $model->$relationName();
+                if (! method_exists($relation, 'getForeignKeyName')) {
+                    continue;
+                }
+                
+                $foreignKey = $relation->getForeignKeyName();
+                
+                // Inject foreign key into each array item
+                foreach ($arrayData as &$item) {
+                    if (is_array($item) && ! isset($item[$foreignKey])) {
+                        $item[$foreignKey] = $parentId;
+                    }
+                }
+                unset($item);
+            } catch (\Exception $e) {
+                \inflow_report($e, 'debug', [
+                    'operation' => 'injectForeignKeys',
+                    'model' => $modelClass,
+                    'relation' => $relationName,
+                ]);
+            }
+        }
     }
 
     // Helper methods for file operations
@@ -667,25 +1127,6 @@ readonly class ETLOrchestrator
 
     // Helper methods for configuration and decisions
 
-    private function determineShouldSanitize(InFlowCommand $command): bool
-    {
-        $sanitizeOption = $command->option('sanitize');
-        $wasSanitizePassed = $command->hasParameterOption('--sanitize', true);
-
-        if ($wasSanitizePassed) {
-            return $this->parseBooleanValue($sanitizeOption);
-        }
-
-        // Use config file default: check sanitizer.enabled
-        $sanitizerEnabled = $this->configResolver->getSanitizerConfig('enabled', true);
-        if (is_bool($sanitizerEnabled)) {
-            return $sanitizerEnabled;
-        }
-
-        // Fallback: if config doesn't exist, use true as default
-        return true;
-    }
-
     private function parseBooleanValue(mixed $value): bool
     {
         if (is_bool($value)) {
@@ -756,19 +1197,17 @@ readonly class ETLOrchestrator
     private function readPreview(ReaderInterface $reader, int $maxRows): array
     {
         $rows = [];
-        $rowCount = 0;
 
         foreach ($reader as $row) {
             $rows[] = $row;
-            $rowCount++;
-            if ($rowCount >= $maxRows) {
+            if (count($rows) >= $maxRows) {
                 break;
             }
         }
 
         return [
             'rows' => $rows,
-            'count' => $rowCount,
+            'count' => count($rows),
         ];
     }
 }
